@@ -1,0 +1,12 @@
+{
+  "name": "jev-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/",
+    "smoke": "node bin/jev-smoke.mjs",
+    "accuracy": "node bin/jev-accuracy.mjs"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "mode": "live",
+  "model": "jev-1.13.0",
+  "baseUrl": "https://api.typesafe.ai/v1/systemone",
+  "timeoutMs": 3000,
+  "maxStateTokens": 24000,
+  "contextBudgetTokens": 6000,
+  "logDir": "logs",
+  "allowedRoots": ["/absolute/path/to/WebSocket Inspector"]
+}
