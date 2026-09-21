@@ -113,10 +113,16 @@ jev-toolkit/
 `decide(area, state, options)`:
 
 1. `guard` checks `process.cwd()` is under one of `config.allowedRoots`; otherwise throws
-   `NotAllowedRoot` and the adapter exits allow with a logged reason. `JEV_DISABLE=1` makes
-   every adapter a no-op that logs `disabled`.
-2. Loads `questions/<area>.mjs`, which exports `{ version, model, questions, thresholds,
-   buildState }`. `model` defaults to `config.model` (pinned, initial value `jev-1.13.0`).
+   `NotAllowedRoot` and the adapter exits allow with a logged reason. Adapters also check the
+   guard and `configMissing` themselves before any deterministic verdict, so an unconfigured
+   install is inert and writes a `skipped` log line. `JEV_DISABLE=1` makes every adapter a
+   no-op; by plan choice the disabled path writes no log line and has no side effects.
+   `allowedRoots` are normalised at load: `~` is expanded, relative and empty entries are
+   dropped, and the guard ignores any non-absolute root.
+2. Loads `questions/<area>.mjs`, which exports `{ version, thresholds, buildQuestions(state),
+   truncate(state) }`; questions are built per state because some areas ask one question per
+   item. The model is `config.model` (pinned, initial value `jev-1.13.0`). Any unexpected
+   error inside `decide` is returned as `reason: "internal"`; `decide` never throws.
 3. `tokens.estimate(state)`; if over `config.maxStateTokens` (default 24000) the area's
    `truncate(state)` is applied and `truncated: true` is recorded.
 4. Mode from `config.mode` or `JEV_MODE`: `live` calls the API; `record` calls and stores the
@@ -145,7 +151,7 @@ justification for changing them.
 
 ### 7.1 comment-policy
 
-State: `{ comments: [{ id, text, kind_hint: "line"|"block"|"kdoc", code_after: string }] }`,
+State: `{ comments: [{ id, text, kind: "line"|"block"|"kdoc", code_after: string }] }`,
 at most 20 comments per call; more are chunked into further calls.
 
 Questions per comment `i`:
@@ -211,10 +217,13 @@ highest probabilities first.
 
 ## 8. Adapters
 
-### 8.1 comment-policy (PreToolUse, matcher `Edit|Write`)
+### 8.1 comment-policy (PreToolUse, matcher `Edit|Write|MultiEdit`)
 
-Input: hook stdin `tool_name`, `tool_input.file_path`, and `tool_input.new_string` (Edit) or
-`tool_input.content` (Write). Files not ending `.kt` or `.kts` exit allow immediately.
+Input: hook stdin `tool_name`, `tool_input.file_path`, and `tool_input.new_string` (Edit),
+`tool_input.content` (Write), or the joined `edits[].new_string` (MultiEdit). Files not ending
+`.kt` or `.kts` exit allow immediately. A trailing line comment (code before `//` on the same
+line) is judged against that same-line code; otherwise `code_after` is the code up to the next
+comment, at most three non-blank lines. Chunks of 20 comments are sent concurrently.
 
 Pipeline: `comments.extract(text)` tokenises line, block, and KDoc comments while skipping
 string and char literals, and captures up to three following non-blank lines as `code_after`.
