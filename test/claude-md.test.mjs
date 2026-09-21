@@ -1,0 +1,32 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { renderClaudeMd } from '../src/targets/claude-md.mjs';
+
+const rules = [
+  { id: 'core', summary: '', paths: [], always: true, body: '# Core\n\ncore body\n', file: '00-core.md' },
+  { id: 'compose', summary: 'C', paths: ['**/ui/**'], always: false, body: '# Compose\n', file: '02-compose.md' },
+  { id: 'git', summary: 'G', paths: [], always: false, body: '# Git\n', file: '10-git.md' },
+];
+
+test('full: core body then one import per non-core rule', () => {
+  const out = renderClaudeMd('full', rules);
+  assert.ok(out.startsWith('# Core\n\ncore body\n'));
+  assert.match(out, /\n@\.claude\/jev-rules\/02-compose\.md\n/);
+  assert.match(out, /\n@\.claude\/jev-rules\/10-git\.md\n/);
+  assert.doesNotMatch(out, /00-core/);
+});
+
+test('stub: core body then the injection notice, no imports', () => {
+  const out = renderClaudeMd('stub', rules);
+  assert.match(out, /injected per task by the JEV dynamic-context hook/);
+  assert.doesNotMatch(out, /@\.claude/);
+});
+
+test('native: core body only', () => {
+  assert.equal(renderClaudeMd('native', rules), '# Core\n\ncore body\n');
+});
+
+test('unknown variant throws; missing core throws', () => {
+  assert.throws(() => renderClaudeMd('bogus', rules), /variant/);
+  assert.throws(() => renderClaudeMd('full', rules.slice(1)), /core/);
+});
