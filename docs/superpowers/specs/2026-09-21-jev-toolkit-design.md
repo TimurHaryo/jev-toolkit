@@ -45,6 +45,7 @@ body `{ model, state, questions }`. Budget about 64k tokens per call, 32k per qu
 
 | Constraint | Consequence |
 |---|---|
+| WorkApp checkouts on the build machine (`work checkout`, `work checkout copy`) are off limits | Nothing is written there: no files, no git, no hooks. The WebSocket Inspector is the only Android project the toolkit modifies. |
 | Jev is early access with unreviewed data terms | Only the user's own material is sent. No WorkApp source, diffs, rules, or prompts. The target CLAUDE.md is written fresh for the WebSocket Inspector. |
 | Toolkit is built on the work machine, run on a personal machine | Zero runtime npm packages. Node 20+ built-in `fetch` and `node:test` only. Nothing is installed. The API key never exists on the build machine. |
 | Personal machine drives Claude Code with DeepSeek or Qwen | Cost is computed from usage tokens times a per-provider price table, never from the headless `total_cost_usd` field. Tier aliases are mapped through the `ANTHROPIC_DEFAULT_*_MODEL` variables per arm. |
