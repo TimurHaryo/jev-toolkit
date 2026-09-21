@@ -14,7 +14,8 @@ reporter, runbook) follow.
 
 ## Setup on a device that has a TypeSafe key
 
-    cp jev.config.example.json jev.config.json   # fill allowedRoots with your target project path
+    git clone https://github.com/TimurHaryo/websocket-inspector.git   # the benchmark target
+    cp jev.config.example.json jev.config.json   # add the target's absolute path to allowedRoots
     export TYPESAFE_API_KEY=...
     node bin/jev-smoke.mjs                        # one live call; paste the block back if it fails
     node bin/jev-accuracy.mjs --area comment-policy --mode record   # records responses into fixtures/recordings
