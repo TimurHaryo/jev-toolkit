@@ -26,6 +26,7 @@ test('loadConfig merges file over DEFAULTS and resolves dirs', async () => {
   assert.equal(cfg.apiKey, 'k');
   assert.equal(cfg.disabled, false);
   assert.equal(cfg.configMissing, false);
+  assert.equal(cfg.configInvalid, false);
 });
 
 test('loadConfig with a missing file falls back to DEFAULTS and flags it', () => {
@@ -33,6 +34,26 @@ test('loadConfig with a missing file falls back to DEFAULTS and flags it', () =>
   assert.equal(cfg.configMissing, true);
   assert.deepEqual(cfg.allowedRoots, []);
   assert.equal(cfg.apiKey, undefined);
+});
+
+test('loadConfig with malformed JSON falls back to DEFAULTS and flags configInvalid', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jevcfg-'));
+  const path = join(dir, 'jev.config.json');
+  await writeFile(path, '{ not json');
+  const cfg = loadConfig({ env: {}, configPath: path });
+  assert.equal(cfg.configMissing, true);
+  assert.equal(cfg.configInvalid, true);
+  assert.deepEqual(cfg.allowedRoots, []);
+  assert.equal(cfg.timeoutMs, DEFAULTS.timeoutMs);
+});
+
+test('loadConfig coerces a non-array allowedRoots to an empty list', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jevcfg-'));
+  const path = join(dir, 'jev.config.json');
+  await writeFile(path, JSON.stringify({ allowedRoots: '/tmp/x' }));
+  const cfg = loadConfig({ env: {}, configPath: path });
+  assert.deepEqual(cfg.allowedRoots, []);
+  assert.equal(cfg.configInvalid, false);
 });
 
 test('env overrides: JEV_MODE, JEV_LOG_DIR, JEV_DISABLE, JEV_CONFIG', async () => {

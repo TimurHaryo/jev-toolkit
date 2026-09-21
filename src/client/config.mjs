@@ -20,9 +20,15 @@ export function toolkitRoot() {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 }
 
+const INVALID = Symbol('invalid');
+
 function readJsonIfPresent(path) {
   if (!existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, 'utf8'));
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return INVALID;
+  }
 }
 
 function resolveDir(base, value) {
@@ -31,22 +37,24 @@ function resolveDir(base, value) {
 
 /**
  * Loads jev.config.json (device-local) over DEFAULTS, then applies env overrides.
- * Never throws for a missing file: returns DEFAULTS with configMissing = true so hooks fail open.
+ * Never throws for a missing or malformed config file: returns DEFAULTS with configMissing = true so hooks fail open.
  */
 export function loadConfig({ env = process.env, configPath } = {}) {
   const path = configPath ?? env.JEV_CONFIG ?? join(toolkitRoot(), 'jev.config.json');
   const fromFile = readJsonIfPresent(path);
-  const base = { ...DEFAULTS, ...(fromFile ?? {}) };
-  const configDir = fromFile ? dirname(path) : toolkitRoot();
+  const usable = fromFile !== null && fromFile !== INVALID;
+  const base = { ...DEFAULTS, ...(usable ? fromFile : {}) };
+  const configDir = usable ? dirname(path) : toolkitRoot();
   const mode = MODES.has(env.JEV_MODE) ? env.JEV_MODE : base.mode;
   return {
     ...base,
     mode,
     logDir: resolveDir(configDir, env.JEV_LOG_DIR ?? base.logDir),
     recordingsDir: join(toolkitRoot(), 'fixtures', 'recordings'),
-    allowedRoots: [...base.allowedRoots],
+    allowedRoots: Array.isArray(base.allowedRoots) ? [...base.allowedRoots] : [],
     apiKey: env.TYPESAFE_API_KEY,
     disabled: env.JEV_DISABLE === '1',
-    configMissing: fromFile === null,
+    configMissing: fromFile === null || fromFile === INVALID,
+    configInvalid: fromFile === INVALID,
   };
 }

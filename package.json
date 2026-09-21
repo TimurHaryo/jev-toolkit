@@ -5,7 +5,7 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test",
     "smoke": "node bin/jev-smoke.mjs",
     "accuracy": "node bin/jev-accuracy.mjs"
   }
