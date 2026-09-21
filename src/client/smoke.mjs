@@ -12,9 +12,15 @@ export function buildSmokeRequest(model) {
   };
 }
 
-export function formatSmokeReport({ status, body, text, validation, latencyMs }) {
+export function formatSmokeReport({ status, body, text, validation, latencyMs, mode, allowedRoots }) {
   const ok = status >= 200 && status < 300 && validation.ok;
-  const lines = [`JEV smoke: ${ok ? 'PASS' : 'FAIL'}`, `status: ${status}`, `latency: ${latencyMs} ms`];
+  const lines = [
+    `JEV smoke: ${ok ? 'PASS' : 'FAIL'}`,
+    `status: ${status}`,
+    `mode: ${mode}`,
+    `allowedRoots: ${JSON.stringify(allowedRoots ?? [])}`,
+    `latency: ${latencyMs} ms`,
+  ];
   if (body?.usage) lines.push(`usage: ${JSON.stringify(body.usage)}`);
   if (ok) {
     lines.push(`answers: ${JSON.stringify(body.answers)}`);

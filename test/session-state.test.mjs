@@ -20,6 +20,14 @@ test('bumpDenyCount increments per session and hash, isolated across sessions', 
   assert.equal(MAX_DENIES, 2);
 });
 
+test('corrupt state file resets to empty', async () => {
+  const dir = join(await mkdtemp(join(tmpdir(), 'jevss-')), 'state');
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 's1.json'), '{ not json');
+  assert.equal(await bumpDenyCount(dir, 's1', 'h'), 1);
+});
+
 test('sessionId is sanitised to a safe filename', async () => {
   const dir = join(await mkdtemp(join(tmpdir(), 'jevss-')), 'state');
   assert.equal(await bumpDenyCount(dir, '../evil/../x', 'h'), 1);

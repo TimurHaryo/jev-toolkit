@@ -33,6 +33,36 @@ test('ordinary prose goes to remaining', () => {
   assert.equal(r.remaining.length, 2);
 });
 
+test('declaration-word prose is not commented-out code', () => {
+  const r = applyFilters([
+    c('object pooling here avoids GC churn during scroll'),
+    c('import order matters: the shim must load first'),
+    c('class loading is deferred until the first frame'),
+    c('override is required because the base class is abstract'),
+    c('public API: callers outside this module rely on the order'),
+    c('val semantics make this safe to share'),
+    c('internal only; do not expose'),
+    c('package-private by convention since the API is internal'),
+    c('var-args would allocate, so this takes a list'),
+  ]);
+  assert.equal(r.deterministic.length, 0);
+  assert.equal(r.remaining.length, 9);
+});
+
+test('kdoc tags are not commented-out code', () => {
+  const doc = applyFilters([c('@param url the url\n@return the client', 'kdoc')]);
+  assert.equal(doc.deterministic.length, 0);
+  assert.equal(doc.remaining.length, 1);
+
+  const line = applyFilters([c('@param url the url\n@return the client')]);
+  assert.equal(line.deterministic.length, 0);
+  assert.equal(line.remaining.length, 1);
+});
+
+test('empty comments are skipped', () => {
+  assert.deepEqual(applyFilters([c(''), c('   ')]), { deterministic: [], remaining: [] });
+});
+
 test('prose that opens with a control keyword is not commented-out code', () => {
   const prose = applyFilters([
     c('when the socket resumes, retry the handshake once'),

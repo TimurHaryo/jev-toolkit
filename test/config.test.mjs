@@ -56,6 +56,22 @@ test('loadConfig coerces a non-array allowedRoots to an empty list', async () =>
   assert.equal(cfg.configInvalid, false);
 });
 
+test('allowedRoots: tilde expanded, relative and empty entries dropped', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jevcfg-'));
+  const path = join(dir, 'jev.config.json');
+  await writeFile(path, JSON.stringify({ allowedRoots: ['~/proj', '', 'relative/dir', '.', '/abs/one'] }));
+  const cfg = loadConfig({ env: { HOME: '/home/u' }, configPath: path });
+  assert.deepEqual(cfg.allowedRoots, ['/home/u/proj', '/abs/one']);
+});
+
+test('invalid mode in config file falls back to replay', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jevcfg-'));
+  const path = join(dir, 'jev.config.json');
+  await writeFile(path, JSON.stringify({ mode: 'Replay' }));
+  const cfg = loadConfig({ env: {}, configPath: path });
+  assert.equal(cfg.mode, 'replay');
+});
+
 test('env overrides: JEV_MODE, JEV_LOG_DIR, JEV_DISABLE, JEV_CONFIG', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'jevcfg-'));
   const path = join(dir, 'c.json');

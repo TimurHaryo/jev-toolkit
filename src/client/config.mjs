@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,6 +37,21 @@ function resolveDir(base, value) {
 }
 
 /**
+ * Expands a leading `~` and drops anything that is not an absolute path.
+ * A relative or empty root would otherwise resolve against the caller's cwd and defeat the guard.
+ */
+function normalizeRoots(list, env) {
+  const home = env.HOME ?? homedir();
+  const out = [];
+  for (const entry of list) {
+    if (typeof entry !== 'string' || !entry) continue;
+    const expanded = entry === '~' ? home : entry.startsWith('~/') ? join(home, entry.slice(2)) : entry;
+    if (isAbsolute(expanded)) out.push(expanded);
+  }
+  return out;
+}
+
+/**
  * Loads jev.config.json (device-local) over DEFAULTS, then applies env overrides.
  * Never throws for a missing or malformed config file: returns DEFAULTS with configMissing = true so hooks fail open.
  */
@@ -45,13 +61,14 @@ export function loadConfig({ env = process.env, configPath } = {}) {
   const usable = fromFile !== null && fromFile !== INVALID;
   const base = { ...DEFAULTS, ...(usable ? fromFile : {}) };
   const configDir = usable ? dirname(path) : toolkitRoot();
-  const mode = MODES.has(env.JEV_MODE) ? env.JEV_MODE : base.mode;
+  const fileMode = MODES.has(base.mode) ? base.mode : 'replay';
+  const mode = MODES.has(env.JEV_MODE) ? env.JEV_MODE : fileMode;
   return {
     ...base,
     mode,
     logDir: resolveDir(configDir, env.JEV_LOG_DIR ?? base.logDir),
     recordingsDir: join(toolkitRoot(), 'fixtures', 'recordings'),
-    allowedRoots: Array.isArray(base.allowedRoots) ? [...base.allowedRoots] : [],
+    allowedRoots: normalizeRoots(Array.isArray(base.allowedRoots) ? base.allowedRoots : [], env),
     apiKey: env.TYPESAFE_API_KEY,
     disabled: env.JEV_DISABLE === '1',
     configMissing: fromFile === null || fromFile === INVALID,

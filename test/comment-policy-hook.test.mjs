@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -68,6 +68,49 @@ test('Jev failure fails open: allow with no output', async () => {
 test('Write tool uses content instead of new_string', async () => {
   const r = await runCommentPolicy(input(null, { tool_name: 'Write', tool_input: { file_path: '/proj/B.kt', content: '// increment counter\ncounter++\n' } }), { config: await cfg(), fetchImpl: fetchWith({ narrates_0: 0.95, kind_0: 'narration' }) });
   assert.equal(r.output.hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('extra keys in answers are ignored, deny still fires', async () => {
+  const f = async () => ({
+    status: 200,
+    text: async () => JSON.stringify({ answers: {
+      narrates_0: { type: 'noul', noul: 0.95 },
+      kind_0: { type: 'choice', choice: 'narration', probabilities: {}, confidence: 0.9 },
+      note: 'ignored',
+    } }),
+  });
+  const r = await runCommentPolicy(input('// increment counter\ncounter++\n'), { config: await cfg(), fetchImpl: f });
+  assert.equal(r.output.hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('MultiEdit edits are examined together', async () => {
+  const r = await runCommentPolicy(input(null, {
+    tool_name: 'MultiEdit',
+    tool_input: { file_path: '/proj/C.kt', edits: [
+      { old_string: 'a', new_string: 'val a = 1' },
+      { old_string: 'b', new_string: '// increment counter\ncounter++' },
+    ] },
+  }), { config: await cfg(), fetchImpl: fetchWith({ narrates_0: 0.95, kind_0: 'narration' }) });
+  assert.equal(r.output.hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('cwd outside allowed roots allows without any call and logs a skip', async () => {
+  let called = false;
+  const config = await cfg();
+  const r = await runCommentPolicy(input('// ===== HELPERS =====\nfun a() {}\n', { cwd: '/elsewhere' }), { config, fetchImpl: async () => { called = true; } });
+  assert.deepEqual(r, { output: null, exitCode: 0 });
+  assert.equal(called, false);
+  const raw = await readFile(join(config.logDir, 'comment-policy.jsonl'), 'utf8');
+  const line = JSON.parse(raw.trim());
+  assert.equal(line.event, 'skipped');
+  assert.equal(line.reason, 'not_allowed_root');
+});
+
+test('missing config allows without any call', async () => {
+  let called = false;
+  const r = await runCommentPolicy(input('// ===== HELPERS =====\nfun a() {}\n'), { config: await cfg({ configMissing: true }), fetchImpl: async () => { called = true; } });
+  assert.deepEqual(r, { output: null, exitCode: 0 });
+  assert.equal(called, false);
 });
 
 test('third identical denied edit is allowed with an advisory', async () => {

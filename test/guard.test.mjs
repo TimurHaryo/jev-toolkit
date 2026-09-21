@@ -19,6 +19,11 @@ test('relative paths and trailing slashes are normalised', () => {
   assert.equal(isAllowedRoot('/a/b/./c', ['/a/b/']), true);
 });
 
+test('relative roots never match', () => {
+  assert.equal(isAllowedRoot(process.cwd(), ['.']), false);
+  assert.equal(isAllowedRoot(process.cwd(), ['']), false);
+});
+
 test('assertAllowedRoot throws NotAllowedRoot with code', () => {
   assert.throws(() => assertAllowedRoot('/x', ['/a']), (e) => e instanceof NotAllowedRoot && e.code === 'not_allowed_root');
 });

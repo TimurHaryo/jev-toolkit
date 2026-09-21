@@ -11,19 +11,29 @@ const SKIP_PREFIX = /^(TODO|FIXME)\b/i;
 const BANNER = /^[\s=\-*_#]*([=\-*_#])\1{2,}[\s=\-*_#A-Za-z]*$/;
 const STEP = /^(step\s*\d+\s*[:.)-]|\d+\s*[.)]\s)/i;
 const CODE_TAIL = /[{};]\s*$/;
-const DECL_HEAD = /^(val|var|fun|import|package|class|object|private|public|internal|override|@\w+)\b/;
+const VAL_HEAD = /^(val|var)\s+\w+\s*[:=]/;
+const FUN_HEAD = /^fun\s+[\w<>.]+\s*\(/;
+const IMPORT_HEAD = /^(import|package)\s+[\w.]+(\.\*)?\s*$/;
+const TYPE_HEAD = /^(class|object|interface|enum class|data class|sealed class)\s+\w+\s*[:({<]/;
+const MODIFIER_HEAD = /^(private|public|internal|protected|override|open|abstract|lateinit|suspend)\s+(val|var|fun|class|object|interface|lateinit|override|suspend)\b/;
+const ANNOTATION_HEAD = /^@\w+(\(.*\))?\s+(val|var|fun|class|object|lateinit|private|public|internal|override)\b/;
 const CONTROL_HEAD = /^(if|when|for|while)\s*\(/;
 const RETURN_HEAD = /^return(\s+[\w.()[\]"']+)?\s*$/;
 
-function isCommentedOutCode(text) {
+const HEADS = [VAL_HEAD, FUN_HEAD, IMPORT_HEAD, TYPE_HEAD, MODIFIER_HEAD, CONTROL_HEAD, RETURN_HEAD];
+
+/** Code shape, not vocabulary: prose that opens with a declaration word must stay prose. */
+function isCommentedOutCode(text, kind) {
   const first = text.split('\n')[0].trim();
-  return CODE_TAIL.test(first) || DECL_HEAD.test(first) || CONTROL_HEAD.test(first) || RETURN_HEAD.test(first);
+  if (CODE_TAIL.test(first)) return true;
+  if (kind !== 'kdoc' && ANNOTATION_HEAD.test(first)) return true;
+  return HEADS.some((head) => head.test(first));
 }
 
-function ruleFor(text) {
+function ruleFor(text, kind) {
   if (BANNER.test(text)) return RULES.BANNER;
   if (STEP.test(text)) return RULES.STEP;
-  if (isCommentedOutCode(text)) return RULES.COMMENTED_OUT;
+  if (isCommentedOutCode(text, kind)) return RULES.COMMENTED_OUT;
   return null;
 }
 
@@ -33,8 +43,8 @@ export function applyFilters(comments) {
   const remaining = [];
   for (const comment of comments) {
     const text = comment.text.trim();
-    if (text.includes(ALLOW_MARKER) || SKIP_PREFIX.test(text)) continue;
-    const rule = ruleFor(text);
+    if (!text || text.includes(ALLOW_MARKER) || SKIP_PREFIX.test(text)) continue;
+    const rule = ruleFor(text, comment.kind);
     if (rule) deterministic.push({ comment, rule });
     else remaining.push(comment);
   }

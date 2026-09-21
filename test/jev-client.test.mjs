@@ -78,6 +78,24 @@ test('5xx is retried once, then reported as http_<status>', async () => {
   assert.equal(r.reason, 'http_503');
 });
 
+test('4xx is not retried', async () => {
+  const config = await cfg();
+  let calls = 0;
+  const f = async () => { calls += 1; return { status: 400, text: async () => 'bad request' }; };
+  const r = await decide('echo', { text: 'x' }, { cwd: '/allowed', config, fetchImpl: f, loadArea });
+  assert.equal(calls, 1);
+  assert.equal(r.reason, 'http_400');
+});
+
+test('429 is retried once', async () => {
+  const config = await cfg();
+  let calls = 0;
+  const f = async () => { calls += 1; return { status: 429, text: async () => 'slow down' }; };
+  const r = await decide('echo', { text: 'x' }, { cwd: '/allowed', config, fetchImpl: f, loadArea });
+  assert.equal(calls, 2);
+  assert.equal(r.reason, 'http_429');
+});
+
 test('network error on first try, success on retry', async () => {
   const config = await cfg();
   let calls = 0;
@@ -89,8 +107,10 @@ test('network error on first try, success on retry', async () => {
 
 test('timeout twice reports timeout', async () => {
   const config = await cfg({ timeoutMs: 10 });
-  const f = (url, init) => new Promise((_, rej) => init.signal.addEventListener('abort', () => rej(Object.assign(new Error('a'), { name: 'AbortError' }))));
+  let calls = 0;
+  const f = (url, init) => { calls += 1; return new Promise((_, rej) => init.signal.addEventListener('abort', () => rej(Object.assign(new Error('a'), { name: 'AbortError' })))); };
   const r = await decide('echo', { text: 'x' }, { cwd: '/allowed', config, fetchImpl: f, loadArea });
+  assert.equal(calls, 2);
   assert.equal(r.reason, 'timeout');
 });
 

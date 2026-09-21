@@ -28,6 +28,9 @@ reporter, runbook) follow.
 Copy `examples/settings.comment-policy.json` into `<target>/.claude/settings.json`, replace the
 absolute path, add the target to `allowedRoots`, then edit a `.kt` file in a Claude Code session.
 A narration comment such as `// increment counter` above `counter++` is denied with a reason.
+Edit, Write, and MultiEdit are all checked; MultiEdit edits are examined together.
+The hook is inert (allows everything, logs a skip) when `jev.config.json` is missing or the project
+is not under `allowedRoots`.
 `JEV_DISABLE=1` turns every hook into a no-op.
 
 ## Layout

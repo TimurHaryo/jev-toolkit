@@ -12,12 +12,12 @@ function safeName(sessionId) {
   return String(sessionId || 'no-session').replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
+/** Loop-breaker bookkeeping only: a missing, unreadable, or corrupt file just starts the count over. */
 async function readState(path) {
   try {
     return JSON.parse(await readFile(path, 'utf8'));
-  } catch (e) {
-    if (e.code === 'ENOENT') return {};
-    throw e;
+  } catch {
+    return {};
   }
 }
 

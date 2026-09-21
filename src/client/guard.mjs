@@ -1,4 +1,4 @@
-import { resolve, sep } from 'node:path';
+import { isAbsolute, resolve, sep } from 'node:path';
 
 /** Thrown when the current directory is not under any configured target root. */
 export class NotAllowedRoot extends Error {
@@ -11,6 +11,8 @@ export class NotAllowedRoot extends Error {
 export function isAllowedRoot(cwd, roots) {
   const target = resolve(cwd);
   return roots.some((root) => {
+    // A relative root would resolve against the caller's cwd and match almost anything.
+    if (typeof root !== 'string' || !isAbsolute(root)) return false;
     const r = resolve(root);
     return target === r || target.startsWith(r + sep);
   });
