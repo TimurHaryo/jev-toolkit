@@ -27,7 +27,7 @@ test('installArm writes CLAUDE.md, settings.json, and jev-rules for a jev arm, p
   assert.equal(settings.hooks.Stop, undefined);
   assert.equal(settings.hooks.PreToolUse[0].hooks[0].command, 'node "/tk/bin/jev-hook-comment-policy.mjs"');
   const claude = await readFile(join(target, 'CLAUDE.md'), 'utf8');
-  assert.match(claude, /@\.claude\/jev-rules\/02-compose\.md/);
+  assert.match(claude, /# Compose/);
   const files = await readdir(join(target, '.claude', 'jev-rules'));
   assert.equal(files.includes('.jev-managed'), true);
   assert.equal(files.filter((f) => f.endsWith('.md')).length, 10);
@@ -62,19 +62,48 @@ test('installArm is idempotent', async () => {
 
 test('every shipped arm file is valid', async () => {
   for (const f of (await readdir(ARMS)).filter((x) => x.endsWith('.json'))) {
-    const arm = JSON.parse(await readFile(join(ARMS, f), 'utf8'));
+    const text = await readFile(join(ARMS, f), 'utf8');
+    const arm = JSON.parse(text);
     assert.ok(['full', 'stub', 'native'].includes(arm.claudeMd), f);
     assert.ok(['jev', 'native', 'none'].includes(arm.rules), f);
+    // The hand-back check runs on the parent's side; the SubagentStart/SubagentStop events are gone.
+    assert.doesNotMatch(text, /SubagentStart|SubagentStop/, f);
     for (const entries of Object.values(arm.hooks)) for (const e of entries) assert.match(e.bin, /^jev-hook-[a-z-]+\.mjs$/, f);
   }
 });
 
-test('refuses to overwrite an unmanaged rules folder and leaves it intact', async () => {
+test('refuses to overwrite an unmanaged rules folder and writes nothing at all', async () => {
   const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
   await mkdir(join(target, '.claude', 'rules'), { recursive: true });
   await writeFile(join(target, '.claude', 'rules', 'user-owned.md'), 'mine');
   await assert.rejects(installArm({ targetDir: target, armFile: join(ARMS, 'dynamic-context-native.json'), rulesDir: RULES, toolkitPath: '/tk' }), /unmanaged/);
   assert.equal(await readFile(join(target, '.claude', 'rules', 'user-owned.md'), 'utf8'), 'mine');
+  await assert.rejects(stat(join(target, 'CLAUDE.md')));
+});
+
+test('a refused switch to the native arm leaves the managed jev-rules folder intact', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  await installArm({ targetDir: target, armFile: join(ARMS, 'dynamic-context-jev.json'), rulesDir: RULES, toolkitPath: '/tk' });
+  await mkdir(join(target, '.claude', 'rules'), { recursive: true });
+  await writeFile(join(target, '.claude', 'rules', 'user-owned.md'), 'mine');
+  await assert.rejects(installArm({ targetDir: target, armFile: join(ARMS, 'dynamic-context-native.json'), rulesDir: RULES, toolkitPath: '/tk' }), /unmanaged/);
+  assert.equal(await readFile(join(target, '.claude', 'rules', 'user-owned.md'), 'utf8'), 'mine');
+  const kept = await readdir(join(target, '.claude', 'jev-rules'));
+  assert.equal(kept.includes('.jev-managed'), true);
+  assert.equal(kept.filter((f) => f.endsWith('.md')).length, 10);
+});
+
+test('refuses a target directory that does not exist', async () => {
+  const target = join(await mkdtemp(join(tmpdir(), 'jevtarget-')), 'nope');
+  await assert.rejects(installArm({ targetDir: target, armFile: join(ARMS, 'base-full.json'), rulesDir: RULES, toolkitPath: '/tk' }), /does not exist/);
+});
+
+test('refuses an arm with an unknown rules mode', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  const armFile = join(target, 'bogus.json');
+  await writeFile(armFile, JSON.stringify({ claudeMd: 'native', rules: 'bogus' }));
+  await assert.rejects(installArm({ targetDir: target, armFile, rulesDir: RULES, toolkitPath: '/tk' }), /unknown rules mode bogus/);
+  await assert.rejects(stat(join(target, 'CLAUDE.md')));
 });
 
 test('refuses a malformed settings.json and leaves it intact', async () => {

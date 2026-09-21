@@ -10,7 +10,7 @@ Plans: `docs/superpowers/plans/`.
 
 Plan 1 done: client, smoke, comment-policy hook, fixtures, accuracy script.
 Plan 2 done: WebSocket Inspector target repo, rule sections, `jev-install`, dynamic-context hook,
-hand-back check (SubagentStart snapshot + SubagentStop card), model-router CLI and skill, fixtures.
+hand-back check (PreToolUse snapshot + PostToolUse card), model-router CLI and skill, fixtures.
 Plan 3 (benchmark runner, reporter, runbook) follows.
 
 ## Setup on a device that has a TypeSafe key
@@ -41,9 +41,14 @@ is not under `allowedRoots`.
 
 Arms live in `targets/websocket-inspector/arms/`. `jev-install` owns `CLAUDE.md`, `.claude/settings.json`'s
 `hooks` key, and the rules folder it writes; it refuses targets outside `allowedRoots`, an unmanaged
-rules folder, and a malformed settings file. Switching arms is one command. The target's `.gitignore`
-excludes `CLAUDE.md` and `.claude/` so the baseline stays clean. Keep `logDir` outside the target
-repository, otherwise the hand-back check attributes log files to subagents.
+rules folder, a missing target directory, and a malformed settings file. Switching arms is one
+command. The target's `.gitignore` excludes `CLAUDE.md` and `.claude/` so the baseline stays clean.
+Keep `logDir` outside the target repository, otherwise the hand-back check attributes log files to
+subagents.
+
+The hand-back check runs as PreToolUse and PostToolUse hooks on the `Agent` tool, so the card
+reaches the parent agent. Subagents must run in the foreground for the card to carry their changes;
+a background dispatch is skipped.
 
 ## Route a brief
 

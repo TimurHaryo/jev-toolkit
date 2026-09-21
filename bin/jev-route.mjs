@@ -10,8 +10,9 @@ async function readStdinText() {
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { brief: { type: 'string' } } });
   try {
+    // Inside the try: an unknown flag is a usage error, not a stack trace.
+    const { values } = parseArgs({ options: { brief: { type: 'string' } } });
     const brief = (values.brief ? await readFile(values.brief, 'utf8') : await readStdinText()).trim();
     if (!brief) {
       console.error('usage: jev-route [--brief <file>]  (or pipe the brief on stdin); brief is empty');

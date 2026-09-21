@@ -46,13 +46,29 @@ async function removeManaged(dir, removed) {
   if (await exists(join(dir, MARKER))) { await rm(dir, { recursive: true, force: true }); removed.push(dir); }
 }
 
+/**
+ * Everything that can refuse the install, run before the first write so a refusal leaves the
+ * target exactly as it was. Only the folder this arm rewrites can refuse: the other kind is
+ * removed solely when it carries the marker, so an unmanaged one is left alone.
+ */
+async function assertInstallable(claudeDir, mode) {
+  const folder = FOLDERS[mode];
+  if (!folder && mode !== 'none') throw new Error(`unknown rules mode ${mode}`);
+  if (!folder) return;
+  const dir = join(claudeDir, folder);
+  // Only a folder JEV wrote carries the marker; anything else is the target's own and is never clobbered.
+  if ((await exists(dir)) && !(await exists(join(dir, MARKER)))) {
+    throw new Error(`refusing to overwrite unmanaged ${dir}; move it aside or delete it first`);
+  }
+}
+
 async function writeRules(claudeDir, mode, rules, written, removed) {
   for (const [kind, folder] of Object.entries(FOLDERS)) {
     if (kind !== mode) await removeManaged(join(claudeDir, folder), removed);
   }
   if (mode === 'none') return;
   const dir = join(claudeDir, FOLDERS[mode]);
-  // Only a folder JEV wrote carries the marker; anything else is the target's own and is never clobbered.
+  // Second line of defence; installArm has already refused an unmanaged folder before any write.
   if ((await exists(dir)) && !(await exists(join(dir, MARKER)))) {
     throw new Error(`refusing to overwrite unmanaged ${dir}; move it aside or delete it first`);
   }
@@ -70,12 +86,15 @@ async function writeRules(claudeDir, mode, rules, written, removed) {
 
 /** Installs one benchmark arm into a target project. JEV owns CLAUDE.md, settings.hooks, and its rules folder. */
 export async function installArm({ targetDir, armFile, rulesDir, toolkitPath }) {
+  // A missing target is a typo, not a project to create: writing a CLAUDE.md into a new tree is never wanted.
+  if (!(await exists(targetDir))) throw new Error(`target does not exist: ${targetDir}`);
   const arm = JSON.parse(await readFile(armFile, 'utf8'));
   const rules = (await loadRules(rulesDir)).map((r) => ({ ...r, sourcePath: join(rulesDir, r.file) }));
   const claudeDir = join(targetDir, '.claude');
   const settingsPath = join(claudeDir, 'settings.json');
   // Read before the first write so a refusal here leaves the target untouched.
   const existing = await readSettings(settingsPath);
+  await assertInstallable(claudeDir, arm.rules);
   const written = [];
   const removed = [];
   await mkdir(claudeDir, { recursive: true });

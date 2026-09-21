@@ -28,6 +28,8 @@ Rules:
    true, `probabilities` and `confidence` describe Jev's original low-confidence choice, not the
    returned tier.
 3. If `tier` is `null` (exit code 3), pick the tier from the routing table by hand and say
-   "Jev unavailable, table says <tier>".
+   "Jev unavailable, table says <tier>". Exit 3 also happens when the current directory is not
+   under `allowedRoots` in `jev.config.json`; that is deliberate (briefs typed inside a non-target
+   repository never reach Jev). Run the router from inside the target project.
 4. Never upgrade above the returned tier without stating why in the dispatch line.
 5. Log nothing yourself; the toolkit writes `logs/model-router.jsonl`.

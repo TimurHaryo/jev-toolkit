@@ -7,6 +7,8 @@ export function renderClaudeMd(variant, rules) {
   const others = rules.filter((r) => !r.always);
   if (variant === 'native') return core.body;
   if (variant === 'stub') return `${core.body}\n${STUB_NOTICE}\n`;
-  if (variant === 'full') return `${core.body}\n${others.map((r) => `@.claude/jev-rules/${r.file}`).join('\n')}\n`;
+  // Inlined, not `@` imports: an import is a budget hint Claude Code may defer, so the arm would
+  // not actually be the "everything up front" baseline it is meant to measure.
+  if (variant === 'full') return `${[core.body.trim(), ...others.map((r) => r.body.trim())].join('\n\n')}\n`;
   throw new Error(`renderClaudeMd: unknown variant ${variant}`);
 }

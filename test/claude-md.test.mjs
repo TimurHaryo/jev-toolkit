@@ -8,11 +8,12 @@ const rules = [
   { id: 'git', summary: 'G', paths: [], always: false, body: '# Git\n', file: '10-git.md' },
 ];
 
-test('full: core body then one import per non-core rule', () => {
+test('full: core body then every non-core rule body inlined in order, no imports', () => {
   const out = renderClaudeMd('full', rules);
   assert.ok(out.startsWith('# Core\n\ncore body\n'));
-  assert.match(out, /\n@\.claude\/jev-rules\/02-compose\.md\n/);
-  assert.match(out, /\n@\.claude\/jev-rules\/10-git\.md\n/);
+  assert.ok(out.endsWith('\n'));
+  assert.match(out, /# Core[\s\S]*# Compose[\s\S]*# Git/);
+  assert.doesNotMatch(out, /@\.claude/);
   assert.doesNotMatch(out, /00-core/);
 });
 
