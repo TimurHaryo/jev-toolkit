@@ -5,3 +5,4 @@ logs/
 results/
 labels/
 .DS_Store
+.superpowers/
