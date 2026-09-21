@@ -162,7 +162,7 @@ test('env overrides: JEV_MODE, JEV_LOG_DIR, JEV_DISABLE, JEV_CONFIG', async () =
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `node --testconfig.test.mjs`
+Run: `node --test test/config.test.mjs`
 Expected: FAIL, cannot find module `../src/client/config.mjs`.
 
 - [ ] **Step 4: Write the implementation**
@@ -225,7 +225,7 @@ export function loadConfig({ env = process.env, configPath } = {}) {
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `node --testconfig.test.mjs`
+Run: `node --test test/config.test.mjs`
 Expected: 4 passing.
 
 - [ ] **Step 6: Commit**
@@ -295,7 +295,7 @@ test('objects are measured as their JSON', () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `node --testguard.test.mjs test/tokens.test.mjs`
+Run: `node --test test/guard.test.mjs test/tokens.test.mjs`
 Expected: FAIL, modules not found.
 
 - [ ] **Step 3: Write the implementations**
@@ -338,7 +338,7 @@ export function estimateTokens(value) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --testguard.test.mjs test/tokens.test.mjs`
+Run: `node --test test/guard.test.mjs test/tokens.test.mjs`
 Expected: 7 passing.
 
 - [ ] **Step 5: Commit**
@@ -414,7 +414,7 @@ test('validateAnswers rejects a non-object body', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testschema.test.mjs`
+Run: `node --test test/schema.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -471,7 +471,7 @@ export function validateAnswers(questions, body) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testschema.test.mjs`
+Run: `node --test test/schema.test.mjs`
 Expected: 5 passing.
 
 - [ ] **Step 5: Commit**
@@ -570,7 +570,7 @@ test('write then read round-trips; missing returns null', async () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `node --testhttp.test.mjs test/recorder.test.mjs`
+Run: `node --test test/http.test.mjs test/recorder.test.mjs`
 Expected: FAIL, modules not found.
 
 - [ ] **Step 3: Write the implementations**
@@ -630,7 +630,7 @@ export async function writeRecording(dir, area, key, body) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --testhttp.test.mjs test/recorder.test.mjs`
+Run: `node --test test/http.test.mjs test/recorder.test.mjs`
 Expected: 6 passing.
 
 - [ ] **Step 5: Commit**
@@ -824,7 +824,7 @@ test('unknown area reports area_load', async () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `node --testlog.test.mjs test/jev-client.test.mjs`
+Run: `node --test test/log.test.mjs test/jev-client.test.mjs`
 Expected: FAIL, modules not found.
 
 - [ ] **Step 3: Write the implementations**
@@ -941,7 +941,7 @@ export async function decide(area, state, opts = {}) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --testlog.test.mjs test/jev-client.test.mjs`
+Run: `node --test test/log.test.mjs test/jev-client.test.mjs`
 Expected: 12 passing.
 
 - [ ] **Step 5: Commit**
@@ -996,7 +996,7 @@ test('EXIT codes', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testhooks-io.test.mjs`
+Run: `node --test test/hooks-io.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1026,7 +1026,7 @@ export function writeHookOutput(obj, out = process.stdout) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testhooks-io.test.mjs`
+Run: `node --test test/hooks-io.test.mjs`
 Expected: 4 passing.
 
 - [ ] **Step 5: Commit**
@@ -1089,7 +1089,7 @@ test('truncate caps comment count and code_after length', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testquestions-comment-policy.test.mjs`
+Run: `node --test test/questions-comment-policy.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1145,7 +1145,7 @@ export function truncate(state) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testquestions-comment-policy.test.mjs`
+Run: `node --test test/questions-comment-policy.test.mjs`
 Expected: 3 passing.
 
 - [ ] **Step 5: Commit**
@@ -1224,7 +1224,7 @@ test('ids are sequential', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testcomments.test.mjs`
+Run: `node --test test/comments.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1339,7 +1339,7 @@ export function extractComments(source) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testcomments.test.mjs`
+Run: `node --test test/comments.test.mjs`
 Expected: 6 passing. If the kdoc `text` test fails on a leading blank line, check `cleanBlock`'s first-and-last blank filter. If `codeAfter` includes a line that belongs to another comment (for example `block */`), check that `coveredLines` marks every line from `line` to `endLine` inclusive and that `codeAfterFrom` starts at index `endLine` (the 0-based index of the line after the comment).
 
 - [ ] **Step 5: Commit**
@@ -1403,7 +1403,7 @@ test('ordinary prose goes to remaining', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testfilters.test.mjs`
+Run: `node --test test/filters.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1454,7 +1454,7 @@ export function applyFilters(comments) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testfilters.test.mjs`
+Run: `node --test test/filters.test.mjs`
 Expected: 5 passing. If `'}'` alone fails the banner-vs-code ordering, confirm `BANNER` requires three repeated characters so a single brace does not match it.
 
 - [ ] **Step 5: Commit**
@@ -1531,7 +1531,7 @@ test('formatReason lists each item with line, rule, and the policy line', () => 
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testdecision.test.mjs`
+Run: `node --test test/decision.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1579,7 +1579,7 @@ export function formatReason(level, items) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testdecision.test.mjs`
+Run: `node --test test/decision.test.mjs`
 Expected: 6 passing.
 
 - [ ] **Step 5: Commit**
@@ -1638,7 +1638,7 @@ test('sessionId is sanitised to a safe filename', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testsession-state.test.mjs`
+Run: `node --test test/session-state.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1681,7 +1681,7 @@ export async function bumpDenyCount(stateDir, sessionId, hash) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testsession-state.test.mjs`
+Run: `node --test test/session-state.test.mjs`
 Expected: 3 passing.
 
 - [ ] **Step 5: Commit**
@@ -1830,7 +1830,7 @@ test('bin entry: JEV_DISABLE=1 exits 0 with no output; banner denies over stdin'
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testcomment-policy-hook.test.mjs`
+Run: `node --test test/comment-policy-hook.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementation**
@@ -1943,7 +1943,7 @@ process.exit(exitCode ?? EXIT.OK);
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testcomment-policy-hook.test.mjs`
+Run: `node --test test/comment-policy-hook.test.mjs`
 Expected: 11 passing. If the bin test's disabled case prints output, check that `loadConfig` reads `JEV_DISABLE` from the spawned env and that `runCommentPolicy` checks `config.disabled` before anything else.
 
 - [ ] **Step 5: Make the bin executable and commit**
@@ -2016,7 +2016,7 @@ test('report fails on non-2xx', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `node --testsmoke.test.mjs`
+Run: `node --test test/smoke.test.mjs`
 Expected: FAIL, module not found.
 
 - [ ] **Step 3: Write the implementations**
@@ -2079,7 +2079,7 @@ process.exit(report.ok ? 0 : 2);
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `node --testsmoke.test.mjs`
+Run: `node --test test/smoke.test.mjs`
 Expected: 4 passing. Also run `node bin/jev-smoke.mjs` with no key set and confirm it prints the key message and exits 2 (no network call is made).
 
 - [ ] **Step 5: Commit**
@@ -2218,7 +2218,7 @@ test('formatReport mentions area, agreement, and skipped reasons', () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `node --testaccuracy.test.mjs`
+Run: `node --test test/accuracy.test.mjs`
 Expected: FAIL on the fixture test if the file is not yet written correctly, and module not found for accuracy.
 
 - [ ] **Step 4: Write the implementation**
@@ -2318,7 +2318,7 @@ console.log(formatReport(values.area, summarize(rows), skipped));
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `node --testaccuracy.test.mjs`
+Run: `node --test test/accuracy.test.mjs`
 Expected: 4 passing. Then run `node bin/jev-accuracy.mjs --area comment-policy --mode replay` and confirm it prints a report with `skipped 40` and every reason `no_recording` (there are no recordings on this machine; that is the expected output here).
 
 - [ ] **Step 6: Commit**
