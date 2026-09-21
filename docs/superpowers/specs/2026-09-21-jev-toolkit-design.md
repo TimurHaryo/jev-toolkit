@@ -243,23 +243,28 @@ advisory. Otherwise allow with no output.
 Loop guard: `session-state` records `sha256(file_path + text)` per `session_id` with a deny
 count; a third identical attempt is allowed with an advisory so a model cannot loop.
 
-### 8.2 handback-check (SubagentStop, matcher excludes `Explore|Plan|claude-code-guide`)
+### 8.2 handback-check (PreToolUse and PostToolUse on the `Agent` tool)
 
-Input: `agent_type`, `agent_id`, `model`, `last_assistant_message`, `cwd`. A SubagentStart hook
-records a content-hash snapshot of the dirty tree per `agent_id`; at SubagentStop the changed set
-is the difference, so files dirty before the subagent began are not attributed to it. Without a
-snapshot the check falls back to the dirty tree against HEAD and says `attribution head`.
+Verified against Claude Code 2.1.278: a SubagentStop hook's `additionalContext` is delivered to
+the subagent and makes it continue, never to the parent. The check therefore runs in the parent's
+own turn: a PreToolUse hook matched on `Agent` records a content-hash snapshot of the dirty tree
+keyed by `tool_use_id`; the PostToolUse hook for the same call computes the changed set as the
+difference, so files dirty before the subagent began are not attributed to it. Without a
+snapshot the check falls back to the dirty tree against HEAD and says `attribution head`. The
+summary is the `tool_response` text; the agent type is `tool_input.subagent_type`; the model is
+`tool_input.model` or `CLAUDE_CODE_SUBAGENT_MODEL`. A background dispatch (response text
+"Async agent launched") is skipped, so benchmark subagents must run in the foreground.
 
 `collectFacts(cwd, { before })`: NUL-separated `git status --porcelain -z -uall` and
 `git ls-files --others -z` give `filesChanged`, `testFilesChanged` (any path containing `/test/`,
 `/androidTest/`, or ending `Test.kt`), `insertions`, `deletions`, `untracked`, `attribution`.
 `mentionedNotInDiff` is the set of paths matching `[\w./-]+\.(kt|kts|gradle|xml|md|mjs|json)` in the
 summary (leading `./` and `../` stripped) that no changed path ends with. If `cwd` is not a git
-repo the hook emits nothing. Agent types `Explore`, `Plan`, `claude-code-guide` are excluded
-inside the adapter, since hook matchers are positive regexes.
+repo the hook emits nothing. Subagent types `Explore`, `Plan`, `claude-code-guide` are excluded
+inside the adapter.
 
-Output: `{ hookSpecificOutput: { hookEventName: "SubagentStop", additionalContext } }`, which
-reaches the parent model; the same card is written to `<logDir>/handback/<agent_id>.card.md`
+Output: `{ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext } }`, which
+reaches the parent model; the same card is written to `<logDir>/handback/<tool_use_id>.card.md`
 for the benchmark. The card is a fixed-format block:
 
 ```
@@ -304,7 +309,8 @@ The benchmark resets to this tag between tasks with `git reset --hard jev-baseli
 -fd`. The first reset only runs after the user confirms in the runbook step.
 
 CLAUDE.md content: written fresh about this project, in the shape of a large production
-Android CLAUDE.md, with these eleven sections, each also a file in `jev-rules/` and in
+Android CLAUDE.md, with these eleven sections (the `paths` globs below are illustrative; the
+shipped files under `targets/websocket-inspector/rules/` are normative), each also a file in `jev-rules/` and in
 `.claude/rules/` for the native arm:
 
 | id | summary | paths |
@@ -321,7 +327,7 @@ Android CLAUDE.md, with these eleven sections, each also a file in `jev-rules/` 
 | gotchas | symptom, cause, fix table for known issues in this project | `**/*.kt` |
 | git | commit format, branch naming | none, on demand only |
 
-Arms write different `CLAUDE.md` files: `full` imports every rule file with `@` imports;
+Arms write different `CLAUDE.md` files: `full` inlines every rule body after the core section;
 `stub` contains only `core` and a line saying rules are injected per task; `native` contains
 `core` and relies on `.claude/rules/*.md` with `paths` frontmatter.
 
