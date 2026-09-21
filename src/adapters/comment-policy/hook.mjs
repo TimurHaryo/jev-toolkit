@@ -40,8 +40,11 @@ async function askJev(remaining, ctx) {
 }
 
 /** Pure-ish entry used by the bin and by tests. Never throws; every failure is allow. */
-export async function runCommentPolicy(input, { config = loadConfig(), fetchImpl = fetch, decideImpl = decide } = {}) {
+export async function runCommentPolicy(input, opts = {}) {
   try {
+    const config = opts.config ?? loadConfig();
+    const fetchImpl = opts.fetchImpl ?? fetch;
+    const decideImpl = opts.decideImpl ?? decide;
     if (config.disabled) return ALLOW;
     const filePath = input.tool_input?.file_path ?? '';
     const text = textOf(input);

@@ -20,4 +20,4 @@ try {
 }
 const report = formatSmokeReport({ ...res, validation: validateAnswers(req.questions, res.body), latencyMs: Date.now() - started });
 console.log(report.text);
-process.exit(report.ok ? 0 : 2);
+process.exitCode = report.ok ? 0 : 2;

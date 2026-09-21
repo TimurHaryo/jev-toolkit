@@ -5,4 +5,4 @@ import { runCommentPolicy } from '../src/adapters/comment-policy/hook.mjs';
 const input = await readStdinJson();
 const { output, exitCode } = await runCommentPolicy(input);
 writeHookOutput(output);
-process.exit(exitCode ?? EXIT.OK);
+process.exitCode = exitCode ?? EXIT.OK;

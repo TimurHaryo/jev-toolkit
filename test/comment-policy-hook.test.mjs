@@ -115,3 +115,8 @@ test('bin entry: JEV_DISABLE=1 exits 0 with no output; banner denies over stdin'
   assert.equal(denied.code, 0);
   assert.equal(JSON.parse(denied.out).hookSpecificOutput.permissionDecision, 'deny');
 });
+
+test('a throwing decideImpl fails open', async () => {
+  const r = await runCommentPolicy(input('// increment counter\ncounter++\n'), { config: await cfg(), decideImpl: async () => { throw new Error('boom'); } });
+  assert.deepEqual(r, { output: null, exitCode: 0 });
+});

@@ -11,6 +11,10 @@ if (!values.area) {
   console.error('usage: jev-accuracy --area <area> [--mode live|record|replay]');
   process.exit(1);
 }
+if (values.mode && !['live', 'record', 'replay'].includes(values.mode)) {
+  console.error('--mode must be live, record, or replay');
+  process.exit(1);
+}
 const config = loadConfig({ env: { ...process.env, ...(values.mode ? { JEV_MODE: values.mode } : {}) } });
 const cwd = config.allowedRoots[0] ?? toolkitRoot();
 if (!config.allowedRoots.length) config.allowedRoots.push(toolkitRoot());
