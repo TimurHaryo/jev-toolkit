@@ -1,0 +1,9 @@
+{
+  "claudeMd": "full",
+  "rules": "jev",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "bin": "jev-hook-comment-policy.mjs", "timeout": 10, "statusMessage": "JEV comment policy" }
+    ]
+  }
+}

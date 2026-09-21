@@ -1,0 +1,12 @@
+{
+  "claudeMd": "full",
+  "rules": "jev",
+  "hooks": {
+    "SubagentStart": [
+      { "matcher": ".*", "bin": "jev-hook-subagent-start.mjs", "timeout": 10 }
+    ],
+    "SubagentStop": [
+      { "matcher": ".*", "bin": "jev-hook-handback.mjs", "timeout": 15, "statusMessage": "JEV hand-back check" }
+    ]
+  }
+}

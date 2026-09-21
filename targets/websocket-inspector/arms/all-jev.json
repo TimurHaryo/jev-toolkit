@@ -1,0 +1,18 @@
+{
+  "claudeMd": "stub",
+  "rules": "jev",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "bin": "jev-hook-comment-policy.mjs", "timeout": 10, "statusMessage": "JEV comment policy" }
+    ],
+    "UserPromptSubmit": [
+      { "bin": "jev-hook-dynamic-context.mjs", "timeout": 10, "statusMessage": "JEV selecting rules" }
+    ],
+    "SubagentStart": [
+      { "matcher": ".*", "bin": "jev-hook-subagent-start.mjs", "timeout": 10 }
+    ],
+    "SubagentStop": [
+      { "matcher": ".*", "bin": "jev-hook-handback.mjs", "timeout": 15, "statusMessage": "JEV hand-back check" }
+    ]
+  }
+}
