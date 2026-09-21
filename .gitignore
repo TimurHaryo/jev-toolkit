@@ -1,0 +1,7 @@
+node_modules/
+jev.config.json
+.env
+logs/
+results/
+labels/
+.DS_Store
