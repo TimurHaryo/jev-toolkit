@@ -17,5 +17,5 @@ benchmark harness. Design: `docs/superpowers/specs/2026-09-21-jev-toolkit-design
 ## Conventions
 
 - ES modules, `.mjs`, JSDoc types. Small files, one responsibility each.
-- Tests with `node --test test/`; every step in the spec's delivery order ends green and committed.
+- Tests with `node --test`; every step in the spec's delivery order ends green and committed.
 - Commit as `timurharyo00@gmail.com` (set per repo), conventional commit prefixes.
