@@ -1233,19 +1233,22 @@ Expected: FAIL, module not found.
 ```js
 const CODE_AFTER_LINES = 3;
 
-function isCommentLine(line) {
-  const t = line.trim();
-  return t.startsWith('//') || t.startsWith('/*') || t.startsWith('*') || t.startsWith('*/');
-}
-
-function codeAfterFrom(lines, startLineIdx) {
+/** `covered` holds every 0-based line index that lies inside any comment. */
+function codeAfterFrom(lines, startLineIdx, covered) {
   const out = [];
   for (let i = startLineIdx; i < lines.length && out.length < CODE_AFTER_LINES; i += 1) {
-    const raw = lines[i];
-    if (!raw.trim() || isCommentLine(raw)) continue;
-    out.push(raw.trim());
+    if (covered.has(i) || !lines[i].trim()) continue;
+    out.push(lines[i].trim());
   }
   return out.join('\n');
+}
+
+function coveredLines(found) {
+  const covered = new Set();
+  for (const c of found) {
+    for (let l = c.line; l <= c.endLine; l += 1) covered.add(l - 1);
+  }
+  return covered;
 }
 
 function cleanBlock(body) {
@@ -1299,7 +1302,7 @@ export function extractComments(source) {
       const end = source.indexOf('\n', i);
       const stop = end === -1 ? n : end;
       const text = source.slice(i + 2, stop).trim();
-      found.push({ line: startLine, kind: 'line', text, endLineIdx: startLine });
+      found.push({ line: startLine, kind: 'line', text, endLine: startLine });
       advance(stop - i);
       continue;
     }
@@ -1315,19 +1318,21 @@ export function extractComments(source) {
         advance();
       }
       const body = source.slice(bodyStart, i).replace(/^\*/, '');
+      const endLine = line;
       advance(2);
-      found.push({ line: startLine, kind, text: cleanBlock(body), endLineIdx: line });
+      found.push({ line: startLine, kind, text: cleanBlock(body), endLine });
       continue;
     }
     advance();
   }
 
+  const covered = coveredLines(found);
   return found.map((c, id) => ({
     id,
     line: c.line,
     kind: c.kind,
     text: c.text,
-    codeAfter: codeAfterFrom(lines, c.endLineIdx),
+    codeAfter: codeAfterFrom(lines, c.endLine, covered),
   }));
 }
 ```
@@ -1335,7 +1340,7 @@ export function extractComments(source) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test test/comments.test.mjs`
-Expected: 6 passing. If the kdoc `text` test fails on a leading blank line, check `cleanBlock`'s first-and-last blank filter; if `codeAfter` for a line comment includes the comment's own line, check that `endLineIdx` for line comments equals the comment's line number (which is the 0-based index of the next line).
+Expected: 6 passing. If the kdoc `text` test fails on a leading blank line, check `cleanBlock`'s first-and-last blank filter. If `codeAfter` includes a line that belongs to another comment (for example `block */`), check that `coveredLines` marks every line from `line` to `endLine` inclusive and that `codeAfterFrom` starts at index `endLine` (the 0-based index of the line after the comment).
 
 - [ ] **Step 5: Commit**
 
