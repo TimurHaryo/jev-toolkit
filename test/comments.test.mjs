@@ -48,3 +48,18 @@ test('ids are sequential', () => {
   const cs = extractComments('// a\n// b\n// c\n');
   assert.deepEqual(cs.map((c) => c.id), [0, 1, 2]);
 });
+
+test('trailing comment anchors to its own line and does not hide it from the comment above', () => {
+  const src = '// first\nval a = 1 // trailing\nval b = 2\n';
+  const cs = extractComments(src);
+  assert.equal(cs[0].codeAfter, 'val a = 1\nval b = 2');
+  assert.equal(cs[1].codeAfter, 'val a = 1');
+  assert.equal(cs[1].line, 2);
+  assert.equal(cs[1].text, 'trailing');
+});
+
+test('trailing comment after a statement sees that statement', () => {
+  const cs = extractComments('counter++ // bump\nval n = 2\n');
+  assert.equal(cs.length, 1);
+  assert.equal(cs[0].codeAfter, 'counter++');
+});

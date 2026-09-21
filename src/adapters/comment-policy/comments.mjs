@@ -1,15 +1,19 @@
 const CODE_AFTER_LINES = 3;
 
-/** `covered` holds every 0-based line index that lies inside any comment. */
-function codeAfterFrom(lines, startLineIdx, covered) {
+/**
+ * `covered` holds every 0-based line index that lies inside any comment.
+ * `codeOnly` maps a trailing comment's line index to the code before the `//`.
+ */
+function codeAfterFrom(lines, startLineIdx, covered, codeOnly) {
   const out = [];
   for (let i = startLineIdx; i < lines.length && out.length < CODE_AFTER_LINES; i += 1) {
     if (covered.has(i)) {
       if (out.length) break;
       continue;
     }
-    if (!lines[i].trim()) continue;
-    out.push(lines[i].trim());
+    const text = codeOnly.get(i) ?? lines[i];
+    if (!text.trim()) continue;
+    out.push(text.trim());
   }
   return out.join('\n');
 }
@@ -17,9 +21,18 @@ function codeAfterFrom(lines, startLineIdx, covered) {
 function coveredLines(found) {
   const covered = new Set();
   for (const c of found) {
+    if (c.trailing) continue;
     for (let l = c.line; l <= c.endLine; l += 1) covered.add(l - 1);
   }
   return covered;
+}
+
+function codeOnlyLines(found) {
+  const codeOnly = new Map();
+  for (const c of found) {
+    if (c.trailing) codeOnly.set(c.line - 1, c.sameLineCode);
+  }
+  return codeOnly;
 }
 
 function cleanBlock(body) {
@@ -37,11 +50,15 @@ export function extractComments(source) {
   const found = [];
   let i = 0;
   let line = 1;
+  let lineStart = 0;
   const n = source.length;
 
   const advance = (k = 1) => {
     for (let s = 0; s < k; s += 1) {
-      if (source[i] === '\n') line += 1;
+      if (source[i] === '\n') {
+        line += 1;
+        lineStart = i + 1;
+      }
       i += 1;
     }
   };
@@ -73,7 +90,15 @@ export function extractComments(source) {
       const end = source.indexOf('\n', i);
       const stop = end === -1 ? n : end;
       const text = source.slice(i + 2, stop).trim();
-      found.push({ line: startLine, kind: 'line', text, endLine: startLine });
+      const prefix = source.slice(lineStart, i).trim();
+      found.push({
+        line: startLine,
+        kind: 'line',
+        text,
+        endLine: startLine,
+        trailing: prefix !== '',
+        sameLineCode: prefix,
+      });
       advance(stop - i);
       continue;
     }
@@ -98,11 +123,12 @@ export function extractComments(source) {
   }
 
   const covered = coveredLines(found);
+  const codeOnly = codeOnlyLines(found);
   return found.map((c, id) => ({
     id,
     line: c.line,
     kind: c.kind,
     text: c.text,
-    codeAfter: codeAfterFrom(lines, c.endLine, covered),
+    codeAfter: c.trailing ? c.sameLineCode : codeAfterFrom(lines, c.endLine, covered, codeOnly),
   }));
 }

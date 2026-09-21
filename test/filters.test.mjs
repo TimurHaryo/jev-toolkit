@@ -32,3 +32,18 @@ test('ordinary prose goes to remaining', () => {
   assert.equal(r.deterministic.length, 0);
   assert.equal(r.remaining.length, 2);
 });
+
+test('prose that opens with a control keyword is not commented-out code', () => {
+  const prose = applyFilters([
+    c('when the socket resumes, retry the handshake once'),
+    c('for large payloads the encoder buffers before framing'),
+    c('if the token is stale the retry path re-auths first'),
+    c('return early when the list is empty'),
+  ]);
+  assert.equal(prose.deterministic.length, 0);
+  assert.equal(prose.remaining.length, 4);
+
+  const code = applyFilters([c('while (running) {'), c('return result'), c('when (state) {')]);
+  assert.equal(code.deterministic.length, 3);
+  assert.ok(code.deterministic.every((d) => d.rule === RULES.COMMENTED_OUT));
+});

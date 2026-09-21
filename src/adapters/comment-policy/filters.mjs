@@ -11,11 +11,13 @@ const SKIP_PREFIX = /^(TODO|FIXME)\b/i;
 const BANNER = /^[\s=\-*_#]*([=\-*_#])\1{2,}[\s=\-*_#A-Za-z]*$/;
 const STEP = /^(step\s*\d+\s*[:.)-]|\d+\s*[.)]\s)/i;
 const CODE_TAIL = /[{};]\s*$/;
-const CODE_HEAD = /^(val|var|fun|return|if|when|for|while|import|package|class|object|private|public|internal|override|@\w+)\b/;
+const DECL_HEAD = /^(val|var|fun|import|package|class|object|private|public|internal|override|@\w+)\b/;
+const CONTROL_HEAD = /^(if|when|for|while)\s*\(/;
+const RETURN_HEAD = /^return(\s+[\w.()[\]"']+)?\s*$/;
 
 function isCommentedOutCode(text) {
   const first = text.split('\n')[0].trim();
-  return CODE_TAIL.test(first) || CODE_HEAD.test(first);
+  return CODE_TAIL.test(first) || DECL_HEAD.test(first) || CONTROL_HEAD.test(first) || RETURN_HEAD.test(first);
 }
 
 function ruleFor(text) {
