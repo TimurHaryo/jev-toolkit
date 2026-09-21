@@ -351,7 +351,7 @@ planning after reading the target's code, and each is checked to reference no Wo
 | | `llm` | same PreToolUse hook but the decision comes from one headless call to the cheapest mapped model with the same criteria text |
 | | `jev` | Jev hook |
 | handback-check | `always` | orchestrator instructions: always read the full diff after a subagent returns; no hook |
-| | `jev` | SubagentStop hook; orchestrator instructions: read the full diff only when the card has a flag |
+| | `jev` | Agent PreToolUse/PostToolUse hand-back hooks; orchestrator instructions: read the full diff only when the card has a flag |
 | model-router | offline | 30 labeled briefs in fixtures; `jev` versus `llm` judge; no session runs |
 
 Arms outside the dynamic-context area use the `full` CLAUDE.md so context is held constant
@@ -413,7 +413,7 @@ model name; unknown models produce `null` and a warning, never a guess.
 - `violations_remaining`: count of narration or restatement comments in the final diff, labeled
   by hand in a `labels/<run-id>.jsonl` file the reporter reads. Never computed by Jev.
 - `flags_raised` and `orchestrator_read_full_diff`: from the hand-back card and from whether
-  the parent transcript contains a `git diff` tool call after the SubagentStop event.
+  the parent transcript contains a `git diff` tool call after the Agent tool result.
 - `compile`: only with `--compile`.
 
 ### 10.5 Reporter
