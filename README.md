@@ -9,8 +9,9 @@ Plans: `docs/superpowers/plans/`.
 ## Status
 
 Plan 1 done: client, smoke, comment-policy hook, fixtures, accuracy script.
-Plan 2 (target install, dynamic context, hand-back, router) and plan 3 (benchmark runner,
-reporter, runbook) follow.
+Plan 2 done: WebSocket Inspector target repo, rule sections, `jev-install`, dynamic-context hook,
+hand-back check (SubagentStart snapshot + SubagentStop card), model-router CLI and skill, fixtures.
+Plan 3 (benchmark runner, reporter, runbook) follows.
 
 ## Setup on a device that has a TypeSafe key
 
@@ -34,10 +35,27 @@ The hook is inert (allows everything, logs a skip) when `jev.config.json` is mis
 is not under `allowedRoots`.
 `JEV_DISABLE=1` turns every hook into a no-op.
 
+## Install an arm into the target
+
+    node bin/jev-install.mjs --target "/absolute/path/WebSocket Inspector" --arm all-jev
+
+Arms live in `targets/websocket-inspector/arms/`. `jev-install` owns `CLAUDE.md`, `.claude/settings.json`'s
+`hooks` key, and the rules folder it writes; it refuses targets outside `allowedRoots`, an unmanaged
+rules folder, and a malformed settings file. Switching arms is one command. The target's `.gitignore`
+excludes `CLAUDE.md` and `.claude/` so the baseline stays clean. Keep `logDir` outside the target
+repository, otherwise the hand-back check attributes log files to subagents.
+
+## Route a brief
+
+    node bin/jev-route.mjs --brief /path/to/brief.md
+
 ## Layout
 
     src/client      decide(area, state) – guard, timeout, retry, record/replay, log
     src/questions   one module per area: buildQuestions, truncate, thresholds, version
     src/adapters    hooks and CLIs, thin; pure decision logic in its own module
+    src/targets     rule loading, CLAUDE.md variants, jev-install
     src/bench       accuracy scoring (runner and reporter arrive in plan 3)
     fixtures        labeled cases and recorded responses
+    skills          model-router SKILL.md
+    targets         per-target rule sections and benchmark arms

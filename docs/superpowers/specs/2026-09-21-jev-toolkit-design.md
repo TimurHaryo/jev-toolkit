@@ -245,21 +245,27 @@ count; a third identical attempt is allowed with an advisory so a model cannot l
 
 ### 8.2 handback-check (SubagentStop, matcher excludes `Explore|Plan|claude-code-guide`)
 
-Input: `agent_type`, `agent_id`, `model`, `last_assistant_message`, `cwd`.
+Input: `agent_type`, `agent_id`, `model`, `last_assistant_message`, `cwd`. A SubagentStart hook
+records a content-hash snapshot of the dirty tree per `agent_id`; at SubagentStop the changed set
+is the difference, so files dirty before the subagent began are not attributed to it. Without a
+snapshot the check falls back to the dirty tree against HEAD and says `attribution head`.
 
-`facts.collect(cwd)`: `git diff --stat HEAD` and `git status --porcelain` give
-`filesChanged`, `testFilesChanged` (any path containing `/test/`, `/androidTest/`, or ending
-`Test.kt`), `insertions`, `deletions`, `untracked`. `mentionedNotInDiff` is the set of paths
-matching `[\w./-]+\.(kt|kts|gradle|xml|md)` in the summary that are not in the diff or untracked
-list. If `cwd` is not a git repo the card says so and no flags are raised.
+`collectFacts(cwd, { before })`: NUL-separated `git status --porcelain -z -uall` and
+`git ls-files --others -z` give `filesChanged`, `testFilesChanged` (any path containing `/test/`,
+`/androidTest/`, or ending `Test.kt`), `insertions`, `deletions`, `untracked`, `attribution`.
+`mentionedNotInDiff` is the set of paths matching `[\w./-]+\.(kt|kts|gradle|xml|md|mjs|json)` in the
+summary (leading `./` and `../` stripped) that no changed path ends with. If `cwd` is not a git
+repo the hook emits nothing. Agent types `Explore`, `Plan`, `claude-code-guide` are excluded
+inside the adapter, since hook matchers are positive regexes.
 
-Output: `{ hookSpecificOutput: { hookEventName: "SubagentStop", systemMessage } }` where the
-message is a fixed-format card:
+Output: `{ hookSpecificOutput: { hookEventName: "SubagentStop", additionalContext } }`, which
+reaches the parent model; the same card is written to `<logDir>/handback/<agent_id>.card.md`
+for the benchmark. The card is a fixed-format block:
 
 ```
 JEV hand-back check (<agent_type>, <model>)
 Flags: <none | one line per flag>
-Facts: files changed <n> (<list, max 8>), test files changed <yes/no>, +<ins>/-<del>, untracked <n>
+Facts: files changed <n> (<list, max 8>), test files changed <yes/no>, +<ins>/-<del>, untracked <n>, attribution <snapshot|head>
 Claims: tests run <p>, tests pass <p>, build ok <p>, tests added <p>, complete <p>, blocker <p>
 Unverified: build ok, tests pass
 Read full diff: <yes if any flag, else "stat only is sufficient">
@@ -298,7 +304,7 @@ The benchmark resets to this tag between tasks with `git reset --hard jev-baseli
 -fd`. The first reset only runs after the user confirms in the runbook step.
 
 CLAUDE.md content: written fresh about this project, in the shape of a large production
-Android CLAUDE.md, with these sections, each also a file in `jev-rules/` and in
+Android CLAUDE.md, with these eleven sections, each also a file in `jev-rules/` and in
 `.claude/rules/` for the native arm:
 
 | id | summary | paths |
@@ -308,6 +314,7 @@ Android CLAUDE.md, with these sections, each also a file in `jev-rules/` and in
 | compose | Compose rules, previews, state hoisting, theme tokens | `**/ui/**`, `**/*Screen*.kt` |
 | coroutines | Flow, StateFlow, dispatcher injection, cancellation | `**/*ViewModel*.kt`, `**/*Repository*.kt` |
 | websocket | frame model, protobuf decode path, reconnect rules | `**/inspector/**` |
+| room | Room entities, DAO conventions, migrations | `**/data/**/*.kt` |
 | testing | test naming, MockK use, what to test per layer | `**/test/**` |
 | comments | the comment policy in words | `**/*.kt` |
 | naming | file, class, and resource naming | `**/*.kt`, `**/res/**` |
@@ -422,7 +429,7 @@ comments, 25 summaries, 30 briefs, 20 prompts against the 10 sections.
 ## 11. Portability and security
 
 - `jev.config.json` (ignored): `allowedRoots`, `mode`, `model`, `timeoutMs`, `maxStateTokens`,
-  `contextBudgetTokens`, `logDir`, `toolkitPath`, `providers: { <name>: { baseUrl, models:
+  `contextBudgetTokens`, `logDir`, `providers: { <name>: { baseUrl, models:
   { opus, sonnet, haiku, subagent }, pricing: { <model>: { input, output, cache_read,
   cache_write } } } }`, `activeProvider`.
 - `TYPESAFE_API_KEY` from the environment only. `.env` is ignored; `.env.example` is committed.
@@ -441,7 +448,7 @@ Written for the personal device, no chat context assumed:
 
 1. Prerequisites: Node 20+, Claude Code installed, DeepSeek or Qwen key, TypeSafe key, `git`.
 2. Clone both repos; copy `jev.config.example.json` to `jev.config.json`; fill `allowedRoots`
-   with the local WebSocket Inspector path and `toolkitPath`; fill provider block; export keys.
+   with the local WebSocket Inspector path (the toolkit path is derived from its own location); fill provider block; export keys.
 3. `node bin/jev-smoke.mjs` and what a pass looks like; what to paste back on failure.
 4. `node bin/jev-accuracy.mjs --area all --mode live` once, then commit the recordings.
 5. Confirm the baseline tag exists in the target; explicit note that the runner resets the
