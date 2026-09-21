@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { decide } from '../src/client/jev-client.mjs';
@@ -35,11 +35,15 @@ test('live call returns answers and meta and writes a log line', async () => {
   assert.equal(r.meta.mode, 'live');
   assert.equal(r.meta.truncated, false);
   assert.equal(r.meta.questionVersion, 'test-1');
-  const line = JSON.parse((await readFile(join(config.logDir, 'echo.jsonl'), 'utf8')).trim());
+  const raw = await readFile(join(config.logDir, 'echo.jsonl'), 'utf8');
+  const line = JSON.parse(raw.trim());
   assert.equal(line.area, 'echo');
   assert.equal(line.sessionId, 's1');
   assert.equal(line.ok, true);
   assert.equal(typeof line.latencyMs, 'number');
+  assert.equal('apiKey' in line, false);
+  assert.equal('config' in line, false);
+  assert.equal(raw.includes('"K"'), false);
 });
 
 test('disabled config short-circuits without calling fetch', async () => {
@@ -124,4 +128,32 @@ test('unknown area reports area_load', async () => {
   const config = await cfg();
   const r = await decide('does-not-exist', {}, { cwd: '/allowed', config, fetchImpl: fetchOk });
   assert.equal(r.reason, 'area_load');
+});
+
+test('area module throwing is reported as internal, not thrown', async () => {
+  const config = await cfg({ maxStateTokens: 1 });
+  const r = await decide('echo', { text: 42 }, { cwd: '/allowed', config, fetchImpl: fetchOk, loadArea });
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'internal');
+});
+
+test('unwritable logDir does not change the result', async () => {
+  const config = await cfg({ logDir: '/dev/null/nope' });
+  const r = await decide('echo', { text: 'yes' }, { cwd: '/allowed', config, fetchImpl: fetchOk, loadArea });
+  assert.equal(r.ok, true);
+  assert.equal(r.answers.yes.noul, 0.9);
+});
+
+test('record mode does not cache a body that fails schema validation', async () => {
+  const config = await cfg({ mode: 'record' });
+  const f = async () => ({ status: 200, text: async () => JSON.stringify({ answers: { yes: { noul: 7 } } }) });
+  const r = await decide('echo', { text: 'yes' }, { cwd: '/allowed', config, fetchImpl: f, loadArea });
+  assert.equal(r.reason, 'schema');
+  let entries = [];
+  try {
+    entries = await readdir(join(config.recordingsDir, 'echo'));
+  } catch (e) {
+    assert.equal(e.code, 'ENOENT');
+  }
+  assert.deepEqual(entries, []);
 });
