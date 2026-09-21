@@ -35,6 +35,9 @@ test('renderCard fixed format', () => {
   assert.match(flagged, /^Flags: x; y$/m);
   assert.match(flagged, /^Claims: unavailable \(Jev timeout\)$/m);
   assert.match(flagged, /^Read full diff: yes$/m);
+  const zero = renderCard({ agentType: 'a', model: 'm', flags: ['x'], facts: { ...facts, filesChanged: [] }, answers: null, reason: 'x' });
+  assert.match(zero, /files changed 0,/);
+  assert.doesNotMatch(zero, /\(\)/);
 });
 
 test('facts line caps the listed paths at eight', () => {

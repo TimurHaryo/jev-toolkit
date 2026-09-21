@@ -18,14 +18,15 @@ export function flagsFor({ answers, facts, thresholds, summary }) {
 }
 
 export function renderCard({ agentType, model, flags, facts, answers, reason }) {
-  const listed = facts.filesChanged.slice(0, MAX_LISTED).join(', ') + (facts.filesChanged.length > MAX_LISTED ? ', …' : '');
+  const shown = facts.filesChanged.slice(0, MAX_LISTED).join(', ') + (facts.filesChanged.length > MAX_LISTED ? ', …' : '');
+  const listed = facts.filesChanged.length ? ` (${shown})` : '';
   const claims = answers
     ? CLAIMS.map(([id, label]) => `${label} ${p(answers, id).toFixed(2)}`).join(', ')
     : `unavailable (Jev ${reason ?? 'unavailable'})`;
   return [
     `JEV hand-back check (${agentType}, ${model ?? 'unknown model'})`,
     `Flags: ${flags.length ? flags.join('; ') : 'none'}`,
-    `Facts: files changed ${facts.filesChanged.length} (${listed}), test files changed ${facts.testFilesChanged ? 'yes' : 'no'}, +${facts.insertions}/-${facts.deletions}, untracked ${facts.untracked}, attribution ${facts.attribution}`,
+    `Facts: files changed ${facts.filesChanged.length}${listed}, test files changed ${facts.testFilesChanged ? 'yes' : 'no'}, +${facts.insertions}/-${facts.deletions}, untracked ${facts.untracked}, attribution ${facts.attribution}`,
     `Claims: ${claims}`,
     'Unverified: build ok, tests pass',
     `Read full diff: ${flags.length ? 'yes' : 'stat only is sufficient'}`,

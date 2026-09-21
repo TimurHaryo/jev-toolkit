@@ -2,14 +2,22 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { runGit } from './git.mjs';
 
-/** Paths from `git status --porcelain -uall`, including renames' new names. */
+/**
+ * Paths from `git status --porcelain -uall`, including renames' new names.
+ * Read NUL-separated: the newline form C-quotes any path holding a space or a non-ASCII byte,
+ * which would then match no file on disk.
+ */
 export function dirtyPaths(cwd) {
-  const out = runGit(cwd, ['status', '--porcelain', '-uall']);
+  const out = runGit(cwd, ['status', '--porcelain', '-z', '-uall']);
   if (!out) return [];
-  return out.split('\n').filter(Boolean).map((line) => {
-    const path = line.slice(3);
-    return path.includes(' -> ') ? path.split(' -> ')[1] : path;
-  });
+  const entries = out.split('\0').filter(Boolean);
+  const paths = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    paths.push(entries[i].slice(3));
+    // A rename or copy is followed by its source path, which is not a change of its own.
+    if (entries[i][0] === 'R' || entries[i][0] === 'C') i += 1;
+  }
+  return paths;
 }
 
 /** Content hash of every dirty path, so a later snapshot can tell what changed in between. */

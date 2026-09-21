@@ -69,9 +69,21 @@ test('collectFacts without a snapshot falls back to HEAD and reports attribution
   assert.deepEqual(g.filesChanged, []);
 });
 
+test('paths with spaces are attributed correctly', async () => {
+  const dir = await repo();
+  const before = takeSnapshot(dir);
+  await writeFile(join(dir, 'src', 'A.kt'), 'class A\nval z = 1\n');
+  await writeFile(join(dir, 'src', 'my file.kt'), 'class B\n');
+  const f = collectFacts(dir, { before });
+  assert.deepEqual(f.filesChanged.sort(), ['src/A.kt', 'src/my file.kt']);
+  assert.equal(f.untracked, 1);
+  assert.equal(f.insertions, 2);
+});
+
 test('mentionedNotInDiff finds paths the summary names that the diff does not contain', () => {
   const facts = { filesChanged: ['inspector/src/main/kotlin/x/SessionTracker.kt'] };
   const summary = 'Edited SessionTracker.kt and added internal/data/FrameRepository.kt; also touched build.gradle.kts';
   assert.deepEqual(mentionedNotInDiff(summary, facts).sort(), ['build.gradle.kts', 'internal/data/FrameRepository.kt']);
   assert.deepEqual(mentionedNotInDiff('no files here', facts), []);
+  assert.deepEqual(mentionedNotInDiff('fixed ../src/A.kt', { filesChanged: ['src/A.kt'] }), []);
 });

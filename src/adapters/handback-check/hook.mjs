@@ -42,7 +42,7 @@ export async function runHandbackCheck(input, opts = {}) {
     const before = await readSnapshot(startPath);
     // Consumed before measuring: when logDir sits inside the repo, the snapshot file is itself
     // a dirty path and would otherwise be attributed to the subagent.
-    await rm(startPath, { force: true });
+    try { await rm(startPath, { force: true }); } catch { /* best-effort */ }
     const facts = collectFacts(cwd, { before: before ? { files: before.files ?? {} } : undefined });
 
     const r = await decideImpl(AREA, { summary, agent_type: agentType }, { cwd, sessionId: input.session_id ?? null, config, fetchImpl });

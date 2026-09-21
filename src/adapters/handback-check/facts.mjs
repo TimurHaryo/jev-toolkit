@@ -6,9 +6,10 @@ import { takeSnapshot, diffSnapshots, dirtyPaths } from './snapshot.mjs';
 const TEST_PATH = /(\/test\/|\/androidTest\/|Test\.kt$)/;
 const PATH_IN_TEXT = /[\w./-]+\.(?:kt|kts|gradle|xml|md|mjs|json)\b/g;
 
+/** NUL-separated for the same reason as dirtyPaths: a space in a path would otherwise be quoted. */
 function untrackedPaths(cwd) {
-  const out = runGit(cwd, ['ls-files', '--others', '--exclude-standard']);
-  return out ? out.split('\n').filter(Boolean) : [];
+  const out = runGit(cwd, ['ls-files', '--others', '--exclude-standard', '-z']);
+  return out ? out.split('\0').filter(Boolean) : [];
 }
 
 function lineCounts(cwd, files, untracked) {
@@ -49,6 +50,6 @@ export function collectFacts(cwd, { before } = {}) {
 
 /** File paths the summary names that no changed path ends with. */
 export function mentionedNotInDiff(summary, facts) {
-  const mentioned = [...new Set((summary.match(PATH_IN_TEXT) ?? []).map((m) => m.replace(/^\.\//, '')))];
+  const mentioned = [...new Set((summary.match(PATH_IN_TEXT) ?? []).map((m) => m.replace(/^(\.\.?\/)+/, '')))];
   return mentioned.filter((m) => !facts.filesChanged.some((f) => f === m || f.endsWith(`/${m}`)));
 }
