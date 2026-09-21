@@ -1,0 +1,30 @@
+{"state":{"brief":"Find the file that defines SocketFrame"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Grep for every call to logFrame"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Which module owns InspectorNotificationManager?"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"List the routes registered in InspectorComposeActivity"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"What is the current Room database version?"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Trace how a text frame travels from Scarlet through the decorator into Room and onto the screen"},"expected":{"tier":"sonnet","needs_broad_exploration":true,"asks_for_change":false}}
+{"state":{"brief":"Write unit tests for FlowStreamAdapter following the existing test naming rule"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Copy the light/dark preview pattern from SocketListScreen to the other four composables"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Fix the compile error in InspectorDatabase after the version bump"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Add a stable key to the LazyColumn in SocketDetailScreen, same as in SocketListScreen"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Follow the session id from createSession through SessionTracker and the DAO and report where it can diverge"},"expected":{"tier":"sonnet","needs_broad_exploration":true,"asks_for_change":false}}
+{"state":{"brief":"Implement a FrameRepository in internal/data with a Flow API and migrate both screens to it"},"expected":{"tier":"opus","needs_broad_exploration":true,"asks_for_change":true}}
+{"state":{"brief":"Make createSession suspend, remove runBlocking, and restructure the decorator so frame logging never blocks the Scarlet thread"},"expected":{"tier":"opus","needs_broad_exploration":true,"asks_for_change":true}}
+{"state":{"brief":"Review this diff of ChuckerScarletWebSocket for correctness and threading"},"expected":{"tier":"opus","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Decide whether the inspector should decode protobuf for display or stay payload-agnostic, and write up the trade-offs"},"expected":{"tier":"opus","needs_broad_exploration":true,"asks_for_change":false}}
+{"state":{"brief":"Design and implement a Room migration from version 2 to 3 adding createdAt with a backfill"},"expected":{"tier":"opus","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Rename the notification channel constants to the naming convention"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Where is Color.Gray used?"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Explain the difference between the ReceiveChannel and Flow based Scarlet interfaces in this app"},"expected":{"tier":"sonnet","needs_broad_exploration":true,"asks_for_change":false}}
+{"state":{"brief":"Add a ViewModel to SocketListScreen and hoist all state and side effects out of the composable"},"expected":{"tier":"opus","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Run the compile check and report the result"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Batch frame inserts when more than ten arrive within one second, with tests"},"expected":{"tier":"opus","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Write a DAO test using an in-memory database for insertFrame and getFramesBySession"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Which Gradle plugin versions does the project use?"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Delete the narration comments in MainActivity"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Audit every coroutine scope in both modules and propose an ownership model"},"expected":{"tier":"opus","needs_broad_exploration":true,"asks_for_change":false}}
+{"state":{"brief":"Show me the SocketFrame entity"},"expected":{"tier":"haiku","needs_broad_exploration":false,"asks_for_change":false}}
+{"state":{"brief":"Fix the duplicate Scarlet clients created when Connect is pressed twice"},"expected":{"tier":"opus","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Add a dark preview to SocketFrameItemComponent"},"expected":{"tier":"sonnet","needs_broad_exploration":false,"asks_for_change":true}}
+{"state":{"brief":"Check whether any composable reads Room directly and list them"},"expected":{"tier":"sonnet","needs_broad_exploration":true,"asks_for_change":false}}
