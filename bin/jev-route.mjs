@@ -11,14 +11,19 @@ async function readStdinText() {
 
 async function main() {
   const { values } = parseArgs({ options: { brief: { type: 'string' } } });
-  const brief = (values.brief ? await readFile(values.brief, 'utf8') : await readStdinText()).trim();
-  if (!brief) {
-    console.error('usage: jev-route [--brief <file>]  (or pipe the brief on stdin); brief is empty');
-    return 1;
+  try {
+    const brief = (values.brief ? await readFile(values.brief, 'utf8') : await readStdinText()).trim();
+    if (!brief) {
+      console.error('usage: jev-route [--brief <file>]  (or pipe the brief on stdin); brief is empty');
+      return 1;
+    }
+    const r = await route(brief);
+    console.log(JSON.stringify(r));
+    return r.tier ? 0 : 3;
+  } catch (e) {
+    console.error(`route failed: ${e.message}`);
+    return 3;
   }
-  const r = await route(brief);
-  console.log(JSON.stringify(r));
-  return r.tier ? 0 : 3;
 }
 
 process.exitCode = await main();

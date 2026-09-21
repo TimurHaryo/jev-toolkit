@@ -60,4 +60,7 @@ test('bin: empty brief exits 1; a routed brief prints one JSON line', async () =
   const parsed = JSON.parse(r.out.trim());
   assert.equal(parsed.tier, null);
   assert.match(parsed.error, /no_recording/);
+  const missing = await run(['--brief', '/nonexistent/brief.md'], { JEV_DISABLE: '' }, '');
+  assert.equal(missing.code, 3);
+  assert.match(missing.err, /route failed/);
 });
