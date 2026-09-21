@@ -11,17 +11,22 @@ async function main() {
     console.error('usage: jev-install --target <dir> --arm <name> [--target-name websocket-inspector]');
     return 1;
   }
-  const config = loadConfig();
-  const targetDir = resolve(values.target);
-  if (config.configMissing || !isAllowedRoot(targetDir, config.allowedRoots)) {
-    console.error(`refused: ${targetDir} is not under allowedRoots in jev.config.json (or the config is missing)`);
-    return 3;
+  try {
+    const config = loadConfig();
+    const targetDir = resolve(values.target);
+    if (config.configMissing || !isAllowedRoot(targetDir, config.allowedRoots)) {
+      console.error(`refused: ${targetDir} is not under allowedRoots in jev.config.json (or the config is missing)`);
+      return 3;
+    }
+    const base = join(toolkitRoot(), 'targets', values['target-name']);
+    const { written, removed } = await installArm({ targetDir, armFile: join(base, 'arms', `${values.arm}.json`), rulesDir: join(base, 'rules'), toolkitPath: toolkitRoot() });
+    for (const p of written) console.log(`wrote   ${p}`);
+    for (const p of removed) console.log(`removed ${p}`);
+    return 0;
+  } catch (e) {
+    console.error(`install failed: ${e.message}`);
+    return 4;
   }
-  const base = join(toolkitRoot(), 'targets', values['target-name']);
-  const { written, removed } = await installArm({ targetDir, armFile: join(base, 'arms', `${values.arm}.json`), rulesDir: join(base, 'rules'), toolkitPath: toolkitRoot() });
-  for (const p of written) console.log(`wrote   ${p}`);
-  for (const p of removed) console.log(`removed ${p}`);
-  return 0;
 }
 
 process.exitCode = await main();

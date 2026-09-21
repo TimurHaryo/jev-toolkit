@@ -68,3 +68,29 @@ test('every shipped arm file is valid', async () => {
     for (const entries of Object.values(arm.hooks)) for (const e of entries) assert.match(e.bin, /^jev-hook-[a-z-]+\.mjs$/, f);
   }
 });
+
+test('refuses to overwrite an unmanaged rules folder and leaves it intact', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  await mkdir(join(target, '.claude', 'rules'), { recursive: true });
+  await writeFile(join(target, '.claude', 'rules', 'user-owned.md'), 'mine');
+  await assert.rejects(installArm({ targetDir: target, armFile: join(ARMS, 'dynamic-context-native.json'), rulesDir: RULES, toolkitPath: '/tk' }), /unmanaged/);
+  assert.equal(await readFile(join(target, '.claude', 'rules', 'user-owned.md'), 'utf8'), 'mine');
+});
+
+test('refuses a malformed settings.json and leaves it intact', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  await mkdir(join(target, '.claude'), { recursive: true });
+  await writeFile(join(target, '.claude', 'settings.json'), '{ nope');
+  await assert.rejects(installArm({ targetDir: target, armFile: join(ARMS, 'base-full.json'), rulesDir: RULES, toolkitPath: '/tk' }), /not valid JSON/);
+  assert.equal(await readFile(join(target, '.claude', 'settings.json'), 'utf8'), '{ nope');
+  await assert.rejects(stat(join(target, 'CLAUDE.md')));
+});
+
+test('an arm without a hooks key installs with empty hooks', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  const armFile = join(target, 'no-hooks.json');
+  await writeFile(armFile, JSON.stringify({ claudeMd: 'native', rules: 'none' }));
+  await installArm({ targetDir: target, armFile, rulesDir: RULES, toolkitPath: '/tk' });
+  const settings = JSON.parse(await readFile(join(target, '.claude', 'settings.json'), 'utf8'));
+  assert.deepEqual(settings.hooks, {});
+});

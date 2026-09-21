@@ -22,8 +22,20 @@ async function exists(path) {
   try { await stat(path); return true; } catch { return false; }
 }
 
-async function readJsonOr(path, fallback) {
-  try { return JSON.parse(await readFile(path, 'utf8')); } catch { return fallback; }
+/** Reads the target's settings. A missing file is empty settings; anything unreadable or malformed stops the install. */
+async function readSettings(path) {
+  let text;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return {};
+    throw e;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${path} is not valid JSON; refusing to overwrite it`);
+  }
 }
 
 function nativeFrontmatter(rule) {
@@ -40,6 +52,10 @@ async function writeRules(claudeDir, mode, rules, written, removed) {
   }
   if (mode === 'none') return;
   const dir = join(claudeDir, FOLDERS[mode]);
+  // Only a folder JEV wrote carries the marker; anything else is the target's own and is never clobbered.
+  if ((await exists(dir)) && !(await exists(join(dir, MARKER)))) {
+    throw new Error(`refusing to overwrite unmanaged ${dir}; move it aside or delete it first`);
+  }
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, MARKER), 'written by jev-install; safe to delete\n');
@@ -56,18 +72,19 @@ async function writeRules(claudeDir, mode, rules, written, removed) {
 export async function installArm({ targetDir, armFile, rulesDir, toolkitPath }) {
   const arm = JSON.parse(await readFile(armFile, 'utf8'));
   const rules = (await loadRules(rulesDir)).map((r) => ({ ...r, sourcePath: join(rulesDir, r.file) }));
+  const claudeDir = join(targetDir, '.claude');
+  const settingsPath = join(claudeDir, 'settings.json');
+  // Read before the first write so a refusal here leaves the target untouched.
+  const existing = await readSettings(settingsPath);
   const written = [];
   const removed = [];
-  const claudeDir = join(targetDir, '.claude');
   await mkdir(claudeDir, { recursive: true });
 
   const claudePath = join(targetDir, 'CLAUDE.md');
   await writeFile(claudePath, renderClaudeMd(arm.claudeMd, rules));
   written.push(claudePath);
 
-  const settingsPath = join(claudeDir, 'settings.json');
-  const existing = await readJsonOr(settingsPath, {});
-  await writeFile(settingsPath, `${JSON.stringify({ ...existing, hooks: renderHooks(arm.hooks, toolkitPath) }, null, 2)}\n`);
+  await writeFile(settingsPath, `${JSON.stringify({ ...existing, hooks: renderHooks(arm.hooks ?? {}, toolkitPath) }, null, 2)}\n`);
   written.push(settingsPath);
 
   await writeRules(claudeDir, arm.rules, rules, written, removed);
