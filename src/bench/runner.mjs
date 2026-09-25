@@ -14,20 +14,36 @@ import { loadTasks, armFileFor } from './tasks.mjs';
 
 export const ALLOWED_TOOLS = 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git *),Bash(./gradlew *),Agent';
 
-async function jevCalls(logDir, areas, sessionId, pricePerMTok) {
-  const answers = []; let calls = 0; let latency = 0; let tokens = 0;
+const USAGE_FIELDS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
+
+/**
+ * Side-channel calls for one session. Jev lines add est_tokens; LLM-judge lines (they carry `usage` and `model`)
+ * add per-model usage priced from the provider table instead.
+ */
+async function jevCalls(logDir, areas, sessionId, pricePerMTok, pricing) {
+  const answers = []; const judgeUsage = {}; let calls = 0; let latency = 0; let tokens = 0;
   for (const area of areas) {
     let text = '';
     try { text = await readFile(join(logDir, `${area}.jsonl`), 'utf8'); } catch { continue; }
     for (const line of text.split('\n').filter(Boolean)) {
       let e; try { e = JSON.parse(line); } catch { continue; }
       if (e.sessionId !== sessionId || e.event === 'skipped') continue;
-      calls += 1; latency += e.latencyMs ?? 0; tokens += e.estTokens ?? 0;
+      calls += 1; latency += e.latencyMs ?? 0;
+      if (e.usage && typeof e.usage === 'object' && e.model) {
+        const acc = judgeUsage[e.model] ?? Object.fromEntries(USAGE_FIELDS.map((f) => [f, 0]));
+        judgeUsage[e.model] = Object.fromEntries(USAGE_FIELDS.map((f) => [f, acc[f] + (e.usage[f] ?? 0)]));
+      } else {
+        tokens += e.estTokens ?? 0;
+      }
       const confs = Object.values(e.answers ?? {}).map((a) => a?.confidence ?? (typeof a?.noul === 'number' ? Math.max(a.noul, 1 - a.noul) : null)).filter((c) => c !== null);
       answers.push({ area, ids: Object.keys(e.answers ?? {}), confidence_min: confs.length ? Math.min(...confs) : null, truncated: e.truncated ?? false });
     }
   }
-  return { calls, latency_ms_total: latency, est_tokens: tokens, cost_usd: (tokens / 1e6) * pricePerMTok, answers };
+  const judgeCost = costFromModelUsage(judgeUsage, pricing);
+  return {
+    stats: { calls, latency_ms_total: latency, est_tokens: tokens, judge_usage: judgeUsage, cost_usd: (tokens / 1e6) * pricePerMTok + (judgeCost.cost_usd ?? 0), answers },
+    warnings: judgeCost.warnings,
+  };
 }
 
 function runGradle(targetDir, spawnImpl) {
@@ -101,12 +117,13 @@ export async function runBenchmark(opts) {
         await writeFile(record.diff_path, diffText({ targetDir, runGitImpl }));
         const cost = Object.keys(res.per_model).length ? costFromModelUsage(res.per_model, provider.pricing) : costFromUsage(res.usage, model, provider.pricing);
         const areasForJev = area === 'comment-policy' && arm === 'llm' ? ['comment-policy-llm'] : area === 'handback' ? ['handback-check'] : [area];
+        const side = await jevCalls(config.logDir, areasForJev, res.session_id, pricePerMTok, provider.pricing);
         Object.assign(record, {
           subtype: res.subtype, session_id: res.session_id, num_turns: res.num_turns, duration_ms: res.duration_ms,
-          usage: { ...res.usage, per_model: res.per_model }, cost_usd: cost.cost_usd, cost_warnings: cost.warnings ?? (cost.warning ? [cost.warning] : []),
+          usage: { ...res.usage, per_model: res.per_model }, cost_usd: cost.cost_usd, cost_warnings: [...(cost.warnings ?? (cost.warning ? [cost.warning] : [])), ...side.warnings],
           total_cost_usd_reported: res.total_cost_usd_reported,
           diff: { ...stat, expect_files_hit: null },
-          jev: await jevCalls(config.logDir, areasForJev, res.session_id, pricePerMTok),
+          jev: side.stats,
           quality: await qualityFor({ area, arm, task, logDir: config.logDir, sessionId: res.session_id, events, rules, cardsBefore }),
         });
         if (compile) record.quality.compile = await (opts.gradleImpl ?? runGradle)(targetDir, spawnImpl);

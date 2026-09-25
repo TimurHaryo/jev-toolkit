@@ -134,3 +134,16 @@ test('native Anthropic runs never inherit a base URL from the caller environment
   assert.equal(Object.hasOwn(call.opts.env, 'ANTHROPIC_BASE_URL'), false);
   assert.equal(call.opts.env.ANTHROPIC_AUTH_TOKEN, 'k');
 });
+
+test('the llm arm counts judge lines and prices their usage', async () => {
+  const s = await setup();
+  await mkdir(s.logDir, { recursive: true });
+  await writeFile(join(s.logDir, 'comment-policy-llm.jsonl'), JSON.stringify({ area: 'comment-policy', model: 'deepseek-chat', sessionId: 'sess-1', ok: true, latencyMs: 900, usage: { input_tokens: 2000, output_tokens: 100 } }) + '\n');
+  const r = await runBenchmark(base(s, { area: 'comment-policy', arm: 'llm', spawnImpl: fakeClaude(s.stream) }));
+  assert.deepEqual(r.failures, []);
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.jev.calls, 1);
+  assert.equal(rec.jev.est_tokens, 0);
+  assert.equal(rec.jev.judge_usage['deepseek-chat'].input_tokens, 2000);
+  assert.equal(rec.jev.cost_usd.toFixed(8), (2000 / 1e6 * 1 + 100 / 1e6 * 2).toFixed(8));
+});

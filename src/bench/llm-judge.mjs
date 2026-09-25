@@ -81,7 +81,7 @@ export function makeJudgeDecide({ model, spawnImpl, env, loadArea = (area) => im
       result = { ok: false, reason: 'internal', detail: e?.message };
     }
     try {
-      if (ctx.config?.logDir) await appendLog(ctx.config.logDir, `${area}-llm`, { ts: new Date(started).toISOString(), area, model, ok: result.ok, reason: result.ok ? null : result.reason, latencyMs: Date.now() - started, usage: result.meta?.usage ?? null });
+      if (ctx.config?.logDir) await appendLog(ctx.config.logDir, `${area}-llm`, { ts: new Date(started).toISOString(), area, sessionId: ctx.sessionId ?? null, model, ok: result.ok, reason: result.ok ? null : result.reason, latencyMs: Date.now() - started, usage: result.meta?.usage ?? null });
     } catch { /* best-effort */ }
     return result;
   };

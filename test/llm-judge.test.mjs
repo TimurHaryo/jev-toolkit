@@ -64,9 +64,14 @@ test('makeJudgeDecide has decide()\'s signature and builds questions from the ar
   const d = makeJudgeDecide({ model: 'm', spawnImpl: fakeSpawn({ stdout: out }), env: {}, loadArea: () => import('./fixtures/questions/echo-area.mjs') });
   const { mkdtemp } = await import('node:fs/promises'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
   const dir = await mkdtemp(join(tmpdir(), 'jevjudge-'));
-  const r = await d('echo', { text: 'yes' }, { config: { logDir: dir } });
+  const r = await d('echo', { text: 'yes' }, { config: { logDir: dir }, sessionId: 'sess-x' });
   assert.equal(r.ok, true);
   assert.equal(r.answers.yes.noul, 0.7);
+  const { readFile } = await import('node:fs/promises');
+  const line = JSON.parse((await readFile(join(dir, 'echo-llm.jsonl'), 'utf8')).trim().split('\n').pop());
+  assert.equal(line.sessionId, 'sess-x');
+  assert.equal(typeof line.usage, 'object');
+  assert.notEqual(line.usage, null);
 });
 
 test('makeJudgeDecide honours timeoutMs', async () => {

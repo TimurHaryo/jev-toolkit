@@ -11,7 +11,7 @@ import { assertTarget } from '../src/bench/target.mjs';
 // The claude child is spawned detached (its own process group), so Ctrl-C does not reach it on its own.
 let current = null;
 function stopCurrent() {
-  if (!current || current.exitCode !== null) return;
+  if (!current || current.exitCode !== null || current.signalCode !== null) return;
   try { if (!(current.pid > 0)) throw new Error('no pid'); process.kill(-current.pid, 'SIGTERM'); } catch { try { current.kill('SIGTERM'); } catch { /* gone */ } }
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { stopCurrent(); process.exit(130); });
@@ -39,7 +39,7 @@ async function main() {
       area: values.area, arm: values.arm, taskIds: values.tasks === 'all' ? 'all' : values.tasks.split(','), reps: Number(values.reps) || 1,
       runId: values['run-id'], targetDir, config, provider, env: process.env, resultsDir: join(toolkitRoot(), 'results'),
       claudeVersion: sh('claude', ['--version']), toolkitCommit: sh('git', ['rev-parse', '--short', 'HEAD'], toolkitRoot()),
-      device: { label: hostname(), os: platform(), node: process.version }, yesReset: true, compile: values.compile, onChild: (c) => { current = c; },
+      device: { label: hostname(), os: platform(), node: process.version }, yesReset: true, compile: values.compile, onChild: (c) => { current = c; c.once('close', () => { if (current === c) current = null; }); },
     });
     console.log(`written ${r.written.length} result file(s); failures ${r.failures.length}`);
     for (const f of r.failures) console.log(`  FAILED ${f.task} r${f.rep}: ${f.error}`);
