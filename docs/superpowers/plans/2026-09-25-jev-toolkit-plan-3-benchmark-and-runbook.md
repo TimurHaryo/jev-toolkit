@@ -850,7 +850,7 @@ test('handbackSignals counts new cards and raised flags', async () => {
 test('readFullDiffAfterAgent finds a git diff after the Agent result', async () => {
   const { events } = parseStream(await readFile(join(toolkitRoot(), 'test', 'fixtures', 'bench', 'stream.jsonl'), 'utf8'));
   assert.equal(readFullDiffAfterAgent(events), true);
-  const noDiff = events.filter((e) => !(e.type === 'assistant' && JSON.stringify(e).includes('"git diff"')));
+  const noDiff = events.filter((e) => !(e.type === 'assistant' && JSON.stringify(e).includes('git diff')));
   assert.equal(readFullDiffAfterAgent(noDiff), false);
   assert.equal(readFullDiffAfterAgent(events.filter((e) => e.type === 'result')), null);
 });
@@ -1165,12 +1165,13 @@ async function target() {
   return dir;
 }
 
-function fakeClaude(streamText, { edit } = {}) {
+function fakeClaude(streamText, { edit, onRun } = {}) {
   return (cmd, args, opts) => {
     fakeClaude.calls.push({ cmd, args, opts });
     const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.kill = () => {};
     setTimeout(async () => {
       if (edit) await writeFile(join(opts.cwd, 'src', 'A.kt'), 'class A { val x = 1 }\n');
+      if (onRun) await onRun(opts);
       p.stdout.emit('data', Buffer.from(streamText)); p.emit('close', 0);
     }, 0);
     return p;
@@ -1238,11 +1239,7 @@ test('handback area runs only subagent tasks and fills its quality fields; a fai
   const s = await setup();
   await writeFile(join(s.tasksDir, '02-info.md'), '---\nid: 02-info\ncategory: info\ngold_sections: []\ngold_tier: haiku\nexpect_files: []\nneeds_subagent: false\n---\nExplain.\n');
   await mkdir(join(s.logDir, 'handback'), { recursive: true });
-  const spawnImpl = (cmd, args, opts) => {
-    const p = fakeClaude(s.stream)(cmd, args, opts);
-    writeFile(join(s.logDir, 'handback', 'tu1.card.md'), 'JEV hand-back check (general-purpose, deepseek-chat)\nFlags: claims tests added; no test files changed\n');
-    return p;
-  };
+  const spawnImpl = fakeClaude(s.stream, { onRun: () => writeFile(join(s.logDir, 'handback', 'tu1.card.md'), 'JEV hand-back check (general-purpose, deepseek-chat)\nFlags: claims tests added; no test files changed\n') });
   const r = await runBenchmark(base(s, { area: 'handback', arm: 'jev', spawnImpl }));
   assert.equal(r.written.length, 1);
   const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
