@@ -37,3 +37,9 @@ test('resetTarget discards tracked edits and untracked files; diffStat sees chan
   assert.match(r.head, /^[0-9a-f]{7,}$/);
   assert.deepEqual(diffStat({ targetDir: dir }), { files: [], insertions: 0, deletions: 0 });
 });
+
+test('assertTarget refuses a subdirectory of a repository even when it is an allowed root', async () => {
+  const dir = await repo();
+  const sub = join(dir, 'src');
+  assert.throws(() => assertTarget({ targetDir: sub, allowedRoots: [sub] }), /root of its git repository/);
+});

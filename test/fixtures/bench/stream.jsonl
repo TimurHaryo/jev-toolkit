@@ -1,5 +1,6 @@
 {"type":"system","subtype":"init","session_id":"sess-1","model":"deepseek-chat"}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will dispatch a subagent."},{"type":"tool_use","id":"tu1","name":"Agent","input":{"prompt":"do it","subagent_type":"general-purpose"}}]}}
+{"type":"assistant","parent_tool_use_id":"tu1","message":{"role":"assistant","content":[{"type":"tool_use","id":"sub1","name":"Bash","input":{"command":"git diff"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"Edited src/A.kt. Tests pass."}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Bash","input":{"command":"git diff --stat"}}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":"1 file changed"}]}}

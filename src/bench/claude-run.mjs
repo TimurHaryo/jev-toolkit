@@ -35,30 +35,65 @@ export function extractResult(result) {
   };
 }
 
-const items = (events, role, kind) => events.flatMap((e, index) => (e.type === role && Array.isArray(e.message?.content) ? e.message.content.filter((c) => c?.type === kind).map((c) => ({ index, ...c })) : []));
+// Events produced inside a subagent carry the parent's Agent tool_use id; they are not the orchestrator's.
+const isNested = (e) => e.parent_tool_use_id !== undefined && e.parent_tool_use_id !== null;
 
-export function toolUses(events) {
-  return items(events, 'assistant', 'tool_use').map(({ index, name, input, id }) => ({ index, name, input, id }));
+const items = (events, role, kind, topLevel) => events.flatMap((e, index) => (e.type === role && !(topLevel && isNested(e)) && Array.isArray(e.message?.content) ? e.message.content.filter((c) => c?.type === kind).map((c) => ({ index, ...c })) : []));
+
+export function toolUses(events, { topLevel = true } = {}) {
+  return items(events, 'assistant', 'tool_use', topLevel).map(({ index, name, input, id }) => ({ index, name, input, id }));
 }
 
-export function toolResults(events) {
-  return items(events, 'user', 'tool_result').map(({ index, tool_use_id }) => ({ index, tool_use_id }));
+export function toolResults(events, { topLevel = true } = {}) {
+  return items(events, 'user', 'tool_result', topLevel).map(({ index, tool_use_id }) => ({ index, tool_use_id }));
 }
 
-/** One headless Claude Code session. Never throws; the caller inspects code/timedOut. */
-export function runClaude({ cwd, prompt, model, maxTurns, allowedTools, env, spawnImpl = nodeSpawn, timeoutMs = 20 * 60 * 1000, rawOutPath }) {
+/** Kills the child's whole process group (it is spawned detached), falling back to the child alone. */
+function killGroup(child, signal) {
+  try {
+    // A missing or zero pid would make -pid address our own group; never signal that.
+    if (!(child.pid > 0)) throw new Error('no pid');
+    process.kill(-child.pid, signal);
+  } catch {
+    try { child.kill(signal); } catch { /* gone */ }
+  }
+}
+
+/**
+ * One headless Claude Code session. Never throws or rejects; the caller inspects code/timedOut.
+ * On timeout: SIGTERM to the process group, SIGKILL after graceMs, and resolve on close or graceMs
+ * after the SIGKILL, so a reset of the target never races a still-running session.
+ */
+export function runClaude({ cwd, prompt, model, maxTurns, allowedTools, env, spawnImpl = nodeSpawn, killImpl = killGroup, timeoutMs = 20 * 60 * 1000, graceMs = 5000, rawOutPath }) {
   return new Promise((resolve) => {
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-turns', String(maxTurns), '--permission-mode', 'acceptEdits', '--allowedTools', allowedTools];
-    const child = spawnImpl('claude', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let child;
+    try {
+      child = spawnImpl('claude', args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    } catch (e) {
+      resolve({ code: null, stdout: '', stderr: e.message, timedOut: false });
+      return;
+    }
     let stdout = ''; let stderr = ''; let timedOut = false; let done = false;
+    const timers = [];
     const finish = async (code) => {
-      if (done) return; done = true; clearTimeout(timer);
+      if (done) return; done = true; for (const t of timers) clearTimeout(t);
       if (rawOutPath) { try { await mkdir(dirname(rawOutPath), { recursive: true }); await writeFile(rawOutPath, stdout); } catch { /* best-effort */ } }
       resolve({ code, stdout, stderr, timedOut });
     };
-    const timer = setTimeout(() => { timedOut = true; try { child.kill(); } catch { /* already gone */ } finish(null); }, timeoutMs);
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr?.on('data', (d) => { stderr += d; });
+    const later = (ms, fn) => { timers.push(setTimeout(fn, ms)); };
+    later(timeoutMs, () => {
+      timedOut = true;
+      killImpl(child, 'SIGTERM');
+      later(graceMs, () => {
+        killImpl(child, 'SIGKILL');
+        later(graceMs, () => finish(null));
+      });
+    });
+    child.stdout.setEncoding?.('utf8');
+    child.stderr?.setEncoding?.('utf8');
+    child.stdout.on('data', (d) => { stdout += String(d); });
+    child.stderr?.on('data', (d) => { stderr += String(d); });
     child.on('error', (e) => { stderr += e.message; finish(null); });
     child.on('close', (code) => finish(code));
   });

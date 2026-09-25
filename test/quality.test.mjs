@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { goldSectionsScore, readInjected, handbackSignals, readFullDiffAfterAgent } from '../src/bench/quality.mjs';
+import { goldSectionsScore, readInjected, handbackSignals, readFullDiffAfterAgent, isFullDiffCommand } from '../src/bench/quality.mjs';
 import { parseStream } from '../src/bench/claude-run.mjs';
 import { toolkitRoot } from '../src/client/config.mjs';
 
@@ -37,4 +37,28 @@ test('readFullDiffAfterAgent finds a git diff after the Agent result', async () 
   const noDiff = events.filter((e) => !(e.type === 'assistant' && JSON.stringify(e).includes('git diff')));
   assert.equal(readFullDiffAfterAgent(noDiff), false);
   assert.equal(readFullDiffAfterAgent(events.filter((e) => e.type === 'result')), null);
+});
+
+test('readFullDiffAfterAgent anchors on the first non-excluded Agent call, not an Explore one', async () => {
+  const { events } = parseStream(await readFile(join(toolkitRoot(), 'test', 'fixtures', 'bench', 'stream.jsonl'), 'utf8'));
+  const explore = [
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu0', name: 'Agent', input: { prompt: 'look', subagent_type: 'Explore' } }] } },
+    { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu0', content: 'found it' }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu0d', name: 'Bash', input: { command: 'git diff' } }] } },
+  ];
+  assert.equal(readFullDiffAfterAgent([...explore, ...events]), true);
+  const noDiffAfterTu1 = events.filter((e) => !(e.type === 'assistant' && JSON.stringify(e).includes('git diff')));
+  assert.equal(readFullDiffAfterAgent([...explore, ...noDiffAfterTu1]), false);
+  assert.equal(readFullDiffAfterAgent(explore), null);
+});
+
+test('isFullDiffCommand accepts diff bodies with git global options and rejects summaries', () => {
+  for (const c of ['git diff', 'git diff HEAD~1', 'git --no-pager diff', 'git -C /t diff']) assert.equal(isFullDiffCommand(c), true, c);
+  for (const c of ['git diff --stat', 'git diff --name-only', 'git status', 'gitk diff']) assert.equal(isFullDiffCommand(c), false, c);
+});
+
+test('readFullDiffAfterAgent ignores a git diff run inside the subagent', async () => {
+  const { events } = parseStream(await readFile(join(toolkitRoot(), 'test', 'fixtures', 'bench', 'stream.jsonl'), 'utf8'));
+  const onlyNested = events.filter((e) => !(e.type === 'assistant' && !e.parent_tool_use_id && JSON.stringify(e).includes('git diff')));
+  assert.equal(readFullDiffAfterAgent(onlyNested), false);
 });
