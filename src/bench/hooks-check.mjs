@@ -21,11 +21,19 @@ async function linesFor(logDir, area, sessionId) {
   } catch { return []; }
 }
 
+const sid = (s) => (typeof s === 'string' ? s : s?.session_id ?? null);
+
+function noLineDetail(s) {
+  const base = `no line with sessionId ${sid(s)}`;
+  return s && typeof s === 'object' ? `${base}; probe exit ${s.code}, timedOut ${s.timedOut}` : base;
+}
+
+/** `sessions` maps each probe to a session id string or to `{ session_id, code, timedOut }`. */
 export async function assessProbes({ logDir, sessions, cardsBefore }) {
   const checks = [];
   for (const [area, key] of [['dynamic-context', 'context'], ['comment-policy', 'comment']]) {
-    const lines = await linesFor(logDir, area, sessions[key]);
-    checks.push({ name: `${area} hook fired`, ok: lines.length > 0, detail: lines.length ? `${lines.length} line(s)${lines.some((l) => l.event === 'skipped') ? ', includes skipped' : ''}` : `no line with sessionId ${sessions[key]}` });
+    const lines = await linesFor(logDir, area, sid(sessions[key]));
+    checks.push({ name: `${area} hook fired`, ok: lines.length > 0, detail: lines.length ? `${lines.length} line(s)${lines.some((l) => l.event === 'skipped') ? ', includes skipped' : ''}` : noLineDetail(sessions[key]) });
     const okLine = lines.find((l) => l.ok === true);
     checks.push({ name: `${area} Jev call ok`, ok: Boolean(okLine), detail: okLine ? 'ok' : (lines.map((l) => l.reason).filter(Boolean).join(', ') || 'no call') });
   }
@@ -44,17 +52,20 @@ export async function checkHooks({ targetDir, config, provider, env, spawnImpl =
   const base = join(toolkitRoot(), 'targets', 'websocket-inspector');
   const args = { targetDir, armFile: join(base, 'arms', 'all-jev.json'), rulesDir: join(base, 'rules'), toolkitPath: toolkitRoot() };
   const runEnv = { ...process.env, ...env, ...armEnv({ provider, env, runId: 'hooks-check', logDir: config.logDir }) };
+  // A native Anthropic run must not be redirected by a base URL left in the caller's environment.
+  if (!provider.baseUrl) delete runEnv.ANTHROPIC_BASE_URL;
   resetTarget({ targetDir, runGitImpl });
-  await installArm(args);
-  const v = await verifyInstall(args);
-  if (!v.ok) throw new Error(`install drift: ${v.problems.join('; ')}`);
-  const cardsBefore = await listCards(join(config.logDir, 'handback'));
   const sessions = {};
+  let cardsBefore;
   try {
+    await installArm(args);
+    const v = await verifyInstall(args);
+    if (!v.ok) throw new Error(`install drift: ${v.problems.join('; ')}`);
+    cardsBefore = await listCards(join(config.logDir, 'handback'));
     for (const probe of PROBES) {
       log(`probe ${probe.name}`);
       const run = await runClaude({ cwd: targetDir, prompt: probe.prompt, model: provider.models.sonnet, maxTurns: 6, allowedTools: ALLOWED_TOOLS, env: runEnv, spawnImpl, timeoutMs: 5 * 60 * 1000 });
-      sessions[probe.name] = extractResult(parseStream(run.stdout).result).session_id;
+      sessions[probe.name] = { session_id: extractResult(parseStream(run.stdout).result).session_id, code: run.code, timedOut: run.timedOut };
     }
   } finally {
     resetTarget({ targetDir, runGitImpl });

@@ -6,8 +6,14 @@ export function p90(nums) { const s = sortNums(nums); if (!s.length) return null
 const mean = (nums) => { const s = sortNums(nums); return s.length ? s.reduce((a, b) => a + b, 0) / s.length : null; };
 const rate = (vals) => { const b = vals.filter((v) => typeof v === 'boolean'); return b.length ? b.filter(Boolean).length / b.length : null; };
 
+/** Hand-labels for a run. A missing file means no labels; an unreadable or malformed one is an error. */
 export async function readLabels(path) {
-  try { return (await readFile(path, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; }
+  let text;
+  try { text = await readFile(path, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+  return text.split('\n').flatMap((l, i) => {
+    if (!l.trim()) return [];
+    try { return [JSON.parse(l)]; } catch { throw new Error(`labels file ${path}: line ${i + 1} is not valid JSON`); }
+  });
 }
 
 export function applyLabels(records, labels) {

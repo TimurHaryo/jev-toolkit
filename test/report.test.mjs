@@ -56,3 +56,10 @@ test('renderReport and compareRuns produce markdown with the expected rows', () 
   assert.match(cmp, /dynamic-context \/ jev/);
   assert.match(cmp, /cost median \| 0\.0100 \| 0\.0200 \| \+0\.0100/);
 });
+
+test('readLabels rejects a malformed line with its line number', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'jevlab-'));
+  const path = join(dir, 'bad.jsonl');
+  await writeFile(path, `${JSON.stringify({ area: 'a', arm: 'b', task: 'c', rep: 1, violations_remaining: 0 })}\n{not json\n`);
+  await assert.rejects(readLabels(path), /line 2/);
+});
