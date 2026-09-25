@@ -8,5 +8,6 @@
     "PostToolUse": [
       { "matcher": "Agent", "bin": "jev-hook-handback-post.mjs", "timeout": 15, "statusMessage": "JEV hand-back check" }
     ]
-  }
+  },
+  "orchestratorNote": "After every Agent call returns you receive a 'JEV hand-back check' card. If its Flags line is not 'none', run `git diff` and read the full diff; otherwise rely on the card's Facts line and do not read the diff. Dispatch subagents in the foreground; never use background dispatch."
 }

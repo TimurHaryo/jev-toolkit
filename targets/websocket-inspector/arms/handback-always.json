@@ -1,0 +1,6 @@
+{
+  "claudeMd": "full",
+  "rules": "jev",
+  "hooks": {},
+  "orchestratorNote": "After every Agent call returns, run `git diff` and read the full diff before deciding anything. Dispatch subagents in the foreground; never use background dispatch."
+}

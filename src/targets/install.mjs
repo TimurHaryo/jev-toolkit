@@ -100,7 +100,7 @@ export async function installArm({ targetDir, armFile, rulesDir, toolkitPath }) 
   await mkdir(claudeDir, { recursive: true });
 
   const claudePath = join(targetDir, 'CLAUDE.md');
-  await writeFile(claudePath, renderClaudeMd(arm.claudeMd, rules));
+  await writeFile(claudePath, renderClaudeMd(arm.claudeMd, rules, arm.orchestratorNote));
   written.push(claudePath);
 
   await writeFile(settingsPath, `${JSON.stringify({ ...existing, hooks: renderHooks(arm.hooks ?? {}, toolkitPath) }, null, 2)}\n`);
@@ -108,4 +108,33 @@ export async function installArm({ targetDir, armFile, rulesDir, toolkitPath }) 
 
   await writeRules(claudeDir, arm.rules, rules, written, removed);
   return { written, removed };
+}
+
+async function readOr(path) {
+  try { return await readFile(path, 'utf8'); } catch { return null; }
+}
+
+/** Re-reads a target and reports every way it differs from the arm; the runner refuses to run on drift. */
+export async function verifyInstall({ targetDir, armFile, rulesDir, toolkitPath }) {
+  const arm = JSON.parse(await readFile(armFile, 'utf8'));
+  const rules = await loadRules(rulesDir);
+  const problems = [];
+  const claudeDir = join(targetDir, '.claude');
+
+  const claude = await readOr(join(targetDir, 'CLAUDE.md'));
+  if (claude !== renderClaudeMd(arm.claudeMd, rules, arm.orchestratorNote)) problems.push('CLAUDE.md differs from the arm variant');
+
+  let settings = null;
+  try { settings = JSON.parse(await readFile(join(claudeDir, 'settings.json'), 'utf8')); } catch { problems.push('settings.json missing or invalid'); }
+  if (settings && JSON.stringify(settings.hooks ?? {}) !== JSON.stringify(renderHooks(arm.hooks ?? {}, toolkitPath))) problems.push('settings.json hooks differ from the arm');
+
+  const others = rules.filter((r) => !r.always);
+  const expectIn = async (folder, list) => {
+    if (!(await exists(join(claudeDir, folder, MARKER)))) problems.push(`${folder} missing or unmanaged`);
+    for (const r of list) if (!(await exists(join(claudeDir, folder, r.file)))) problems.push(`${folder}/${r.file} missing`);
+  };
+  if (arm.rules === 'jev') await expectIn('jev-rules', others);
+  if (arm.rules === 'native') { await expectIn('rules', others.filter((r) => r.paths.length)); if (await exists(join(claudeDir, 'jev-rules'))) problems.push('jev-rules present under a native arm'); }
+  if (arm.rules === 'none') for (const f of Object.values(FOLDERS)) if (await exists(join(claudeDir, f, MARKER))) problems.push(`${f} present under a rules:none arm`);
+  return problems.length ? { ok: false, problems } : { ok: true };
 }

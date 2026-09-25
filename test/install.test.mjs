@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, readdir, mkdir, stat } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, readdir, mkdir, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { renderHooks, installArm } from '../src/targets/install.mjs';
+import { renderHooks, installArm, verifyInstall } from '../src/targets/install.mjs';
 import { toolkitRoot } from '../src/client/config.mjs';
 
 const RULES = join(toolkitRoot(), 'targets', 'websocket-inspector', 'rules');
@@ -122,4 +122,31 @@ test('an arm without a hooks key installs with empty hooks', async () => {
   await installArm({ targetDir: target, armFile, rulesDir: RULES, toolkitPath: '/tk' });
   const settings = JSON.parse(await readFile(join(target, '.claude', 'settings.json'), 'utf8'));
   assert.deepEqual(settings.hooks, {});
+});
+
+test('handback arms carry an orchestrator note that lands in CLAUDE.md', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  await installArm({ targetDir: target, armFile: join(ARMS, 'handback-jev.json'), rulesDir: RULES, toolkitPath: '/tk' });
+  const claude = await readFile(join(target, 'CLAUDE.md'), 'utf8');
+  assert.match(claude, /## Orchestrator note \(benchmark arm\)/);
+  assert.match(claude, /JEV hand-back check/);
+  await installArm({ targetDir: target, armFile: join(ARMS, 'handback-always.json'), rulesDir: RULES, toolkitPath: '/tk' });
+  assert.match(await readFile(join(target, 'CLAUDE.md'), 'utf8'), /read the full diff before deciding/);
+});
+
+test('verifyInstall passes after install and reports each drift', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'jevtarget-'));
+  const args = { targetDir: target, armFile: join(ARMS, 'all-jev.json'), rulesDir: RULES, toolkitPath: '/tk' };
+  await installArm(args);
+  assert.deepEqual(await verifyInstall(args), { ok: true });
+  await writeFile(join(target, 'CLAUDE.md'), 'tampered');
+  const settings = JSON.parse(await readFile(join(target, '.claude', 'settings.json'), 'utf8'));
+  await writeFile(join(target, '.claude', 'settings.json'), JSON.stringify({ ...settings, hooks: {} }));
+  await rm(join(target, '.claude', 'jev-rules', '02-compose.md'));
+  const r = await verifyInstall(args);
+  assert.equal(r.ok, false);
+  assert.equal(r.problems.length, 3);
+  assert.ok(r.problems.some((p) => /CLAUDE\.md/.test(p)));
+  assert.ok(r.problems.some((p) => /hooks/.test(p)));
+  assert.ok(r.problems.some((p) => /02-compose\.md/.test(p)));
 });

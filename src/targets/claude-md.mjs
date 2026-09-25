@@ -1,7 +1,12 @@
 const STUB_NOTICE = 'Project rules are injected per task by the JEV dynamic-context hook; do not look for them here.';
 
 /** Builds the CLAUDE.md text for one benchmark arm from the loaded rule sections. */
-export function renderClaudeMd(variant, rules) {
+export function renderClaudeMd(variant, rules, note) {
+  const base = renderVariant(variant, rules);
+  return note ? `${base}\n## Orchestrator note (benchmark arm)\n\n${note.trim()}\n` : base;
+}
+
+function renderVariant(variant, rules) {
   const core = rules.find((r) => r.always);
   if (!core) throw new Error('renderClaudeMd: no always-on core section');
   const others = rules.filter((r) => !r.always);
