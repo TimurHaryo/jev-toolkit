@@ -4,15 +4,22 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { toolkitRoot } from '../client/config.mjs';
 import { installArm, verifyInstall } from '../targets/install.mjs';
 import { loadRules } from '../targets/rules.mjs';
-import { armEnv } from './providers.mjs';
+import { headlessEnv } from './providers.mjs';
 import { costFromUsage, costFromModelUsage } from './pricing.mjs';
 import { runClaude, parseStream, extractResult } from './claude-run.mjs';
 import { assertTarget, resetTarget, diffStat, diffText } from './target.mjs';
 import { buildManifest, writeManifest, writeResult } from './results.mjs';
 import { goldSectionsScore, readInjected, listCards, handbackSignals, readFullDiffAfterAgent } from './quality.mjs';
 import { loadTasks, armFileFor } from './tasks.mjs';
+import { version as commentPolicyVersion } from '../questions/comment-policy.mjs';
+import { version as dynamicContextVersion } from '../questions/dynamic-context.mjs';
+import { version as handbackCheckVersion } from '../questions/handback-check.mjs';
+import { version as modelRouterVersion } from '../questions/model-router.mjs';
 
-export const ALLOWED_TOOLS = 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git *),Bash(./gradlew *),Agent';
+// Read-only git only: a session must not commit, reset, or check out in the target.
+export const ALLOWED_TOOLS = 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff *),Bash(git status *),Bash(git log *),Bash(git show *),Bash(./gradlew *),Agent';
+
+export const QUESTION_VERSIONS = Object.freeze({ 'comment-policy': commentPolicyVersion, 'dynamic-context': dynamicContextVersion, 'handback-check': handbackCheckVersion, 'model-router': modelRouterVersion });
 
 const USAGE_FIELDS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
 
@@ -21,7 +28,7 @@ const USAGE_FIELDS = ['input_tokens', 'output_tokens', 'cache_creation_input_tok
  * add per-model usage priced from the provider table instead.
  */
 async function jevCalls(logDir, areas, sessionId, pricePerMTok, pricing) {
-  const answers = []; const judgeUsage = {}; let calls = 0; let latency = 0; let tokens = 0;
+  const answers = []; const judgeUsage = {}; const reasons = {}; let calls = 0; let okCalls = 0; let latency = 0; let tokens = 0;
   for (const area of areas) {
     let text = '';
     try { text = await readFile(join(logDir, `${area}.jsonl`), 'utf8'); } catch { continue; }
@@ -29,6 +36,8 @@ async function jevCalls(logDir, areas, sessionId, pricePerMTok, pricing) {
       let e; try { e = JSON.parse(line); } catch { continue; }
       if (e.sessionId !== sessionId || e.event === 'skipped') continue;
       calls += 1; latency += e.latencyMs ?? 0;
+      if (e.ok === true) okCalls += 1;
+      else { const reason = e.reason ?? 'unknown'; reasons[reason] = (reasons[reason] ?? 0) + 1; }
       if (e.usage && typeof e.usage === 'object' && e.model) {
         const acc = judgeUsage[e.model] ?? Object.fromEntries(USAGE_FIELDS.map((f) => [f, 0]));
         judgeUsage[e.model] = Object.fromEntries(USAGE_FIELDS.map((f) => [f, acc[f] + (e.usage[f] ?? 0)]));
@@ -40,10 +49,30 @@ async function jevCalls(logDir, areas, sessionId, pricePerMTok, pricing) {
     }
   }
   const judgeCost = costFromModelUsage(judgeUsage, pricing);
+  // An unpriced judge model makes the whole side-channel cost unknown, never silently zero.
+  const cost = judgeCost.cost_usd === null ? null : (tokens / 1e6) * pricePerMTok + judgeCost.cost_usd;
   return {
-    stats: { calls, latency_ms_total: latency, est_tokens: tokens, judge_usage: judgeUsage, cost_usd: (tokens / 1e6) * pricePerMTok + (judgeCost.cost_usd ?? 0), answers },
+    stats: { calls, ok_calls: okCalls, reasons, latency_ms_total: latency, est_tokens: tokens, judge_usage: judgeUsage, cost_usd: cost, answers },
     warnings: judgeCost.warnings,
   };
+}
+
+/** Simple glob to an anchored regex: `**` any path, `*` within one segment, `?` one character. */
+function globToRegex(glob) {
+  let out = '';
+  for (let i = 0; i < glob.length; i += 1) {
+    const c = glob[i];
+    if (c === '*' && glob[i + 1] === '*') { out += '.*'; i += 1; } else if (c === '*') out += '[^/]*';
+    else if (c === '?') out += '.';
+    else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`^${out}$`);
+}
+
+/** Fraction of the task's expect_files globs matched by at least one changed path; null when it has none. */
+export function expectFilesHit(globs, files) {
+  if (!globs?.length) return null;
+  return globs.filter((g) => { const re = globToRegex(g); return files.some((f) => re.test(f)); }).length / globs.length;
 }
 
 function runGradle(targetDir, spawnImpl) {
@@ -77,9 +106,7 @@ export async function runBenchmark(opts) {
   const log = opts.log ?? ((m) => console.log(m));
   if (!yesReset) throw new Error('refusing to reset the target without --yes-reset (it discards uncommitted changes)');
   assertTarget({ targetDir, allowedRoots: config.allowedRoots, runGitImpl });
-  const runEnv = { ...process.env, ...env, ...armEnv({ provider, env, runId, logDir: config.logDir }) };
-  // A native Anthropic run must not be redirected by a base URL left in the caller's environment.
-  if (!provider.baseUrl) delete runEnv.ANTHROPIC_BASE_URL;
+  const runEnv = headlessEnv({ provider, config, env, runId });
 
   const base = join(toolkitRoot(), 'targets', targetName);
   const armFile = join(base, 'arms', armFileFor(area, arm));
@@ -91,7 +118,7 @@ export async function runBenchmark(opts) {
   const model = provider.models[config.benchmark?.orchestratorTier ?? 'opus'];
   const maxTurns = config.benchmark?.maxTurns ?? 30;
   const pricePerMTok = config.benchmark?.jevInputPricePerMTok ?? 0.042;
-  await writeManifest(resultsDir, buildManifest({ runId, provider, config, claudeVersion, toolkitCommit, device }));
+  await writeManifest(resultsDir, buildManifest({ runId, provider, config, claudeVersion, toolkitCommit, device, questionVersions: { ...QUESTION_VERSIONS } }));
 
   const written = []; const failures = [];
   for (const task of tasks) {
@@ -122,7 +149,7 @@ export async function runBenchmark(opts) {
           subtype: res.subtype, session_id: res.session_id, num_turns: res.num_turns, duration_ms: res.duration_ms,
           usage: { ...res.usage, per_model: res.per_model }, cost_usd: cost.cost_usd, cost_warnings: [...(cost.warnings ?? (cost.warning ? [cost.warning] : [])), ...side.warnings],
           total_cost_usd_reported: res.total_cost_usd_reported,
-          diff: { ...stat, expect_files_hit: null },
+          diff: { ...stat, expect_files_hit: expectFilesHit(task.expect_files, stat.files) },
           jev: side.stats,
           quality: await qualityFor({ area, arm, task, logDir: config.logDir, sessionId: res.session_id, events, rules, cardsBefore }),
         });

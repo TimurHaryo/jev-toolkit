@@ -4,15 +4,24 @@ import { toolUses, toolResults } from './claude-run.mjs';
 import { AGENT_TOOLS, EXCLUDED } from '../adapters/handback-check/pre-hook.mjs';
 import { readInjected as readHookState } from '../adapters/dynamic-context/session-state.mjs';
 
-// Global options such as `--no-pager` or `-C <path>` may sit between `git` and `diff`.
-const GIT_DIFF = /\bgit\b(?:\s+-{1,2}[\w=./-]+(?:\s+[\w./-]+)?)*\s+diff\b/;
+// Global options such as `--no-pager` or `-C <path>` may sit between `git` and the subcommand.
+const GIT_OPTS = String.raw`\bgit\b(?:\s+-{1,2}[\w=./-]+(?:\s+[\w./-]+)?)*\s+`;
+const GIT_DIFF = new RegExp(`${GIT_OPTS}diff\\b`);
+const GIT_SHOW = new RegExp(`${GIT_OPTS}show\\b`);
+const GIT_LOG = new RegExp(`${GIT_OPTS}log\\b`);
 const SUMMARY_ONLY = /--(?:stat|numstat|shortstat|name-only|name-status)\b/;
+const PATCH = /(?:^|\s)(?:-p|--patch)(?=\s|$)/;
 
-/** A command that shows the diff body, not just a summary of it. */
+function isFullDiffSegment(segment) {
+  if ((GIT_DIFF.test(segment) || GIT_SHOW.test(segment)) && !SUMMARY_ONLY.test(segment)) return true;
+  return GIT_LOG.test(segment) && PATCH.test(segment);
+}
+
+/** A command that shows a diff body, not just a summary of it, in any segment of a compound command. */
 export function isFullDiffCommand(command) {
   // Quoted segments (e.g. `-C "/path with space"`) collapse to one token so the option grammar still matches.
   const normalised = String(command ?? '').replace(/"[^"]*"|'[^']*'/g, 'Q');
-  return GIT_DIFF.test(normalised) && !SUMMARY_ONLY.test(normalised);
+  return normalised.split(/&&|\|\||;|\|/).some(isFullDiffSegment);
 }
 
 export function goldSectionsScore(injected, gold) {

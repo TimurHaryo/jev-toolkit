@@ -4,8 +4,15 @@ import { runGit, isGitRepo } from '../adapters/handback-check/git.mjs';
 
 export const BASELINE_TAG = 'jev-baseline';
 
+const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
+
 export function assertTarget({ targetDir, allowedRoots, runGitImpl = runGit }) {
   if (!isAllowedRoot(targetDir, allowedRoots)) throw new Error(`${targetDir} is not under allowedRoots`);
+  // A symlink inside an allowed root must not lead the reset outside it. Roots are resolved too, so a
+  // root that is itself reached through a symlink (macOS /tmp, /var) still matches.
+  let real;
+  try { real = realpathSync(targetDir); } catch { throw new Error(`${targetDir} does not exist`); }
+  if (!isAllowedRoot(real, allowedRoots.map(realOrSelf))) throw new Error(`${targetDir} resolves to ${real}, which is not under allowedRoots`);
   if (!isGitRepo(targetDir)) throw new Error(`${targetDir} is not a git repository`);
   // A subdirectory would let reset/clean act on the enclosing repository, outside the target.
   const top = runGitImpl(targetDir, ['rev-parse', '--show-toplevel']);
@@ -22,7 +29,13 @@ export function resetTarget({ targetDir, runGitImpl = runGit }) {
   return { head: runGitImpl(targetDir, ['rev-parse', '--short', 'HEAD']) };
 }
 
+/** Marks untracked files intent-to-add so `git diff jev-baseline` shows them as new files. */
+function includeUntracked(targetDir, runGitImpl) {
+  runGitImpl(targetDir, ['add', '-N', '--', '.']);
+}
+
 export function diffStat({ targetDir, runGitImpl = runGit }) {
+  includeUntracked(targetDir, runGitImpl);
   // -z keeps paths verbatim (no quoting); --no-renames keeps every record as `ins\tdel\tpath`.
   const numstat = runGitImpl(targetDir, ['diff', BASELINE_TAG, '--numstat', '--no-renames', '-z']) ?? '';
   const files = []; let insertions = 0; let deletions = 0;
@@ -30,11 +43,10 @@ export function diffStat({ targetDir, runGitImpl = runGit }) {
     const [ins, del, path] = record.split('\t');
     files.push(path); insertions += Number(ins) || 0; deletions += Number(del) || 0;
   }
-  const untracked = (runGitImpl(targetDir, ['ls-files', '--others', '--exclude-standard', '-z']) ?? '').split('\0').filter(Boolean);
-  for (const u of untracked) files.push(u);
   return { files, insertions, deletions };
 }
 
 export function diffText({ targetDir, runGitImpl = runGit }) {
+  includeUntracked(targetDir, runGitImpl);
   return runGitImpl(targetDir, ['diff', BASELINE_TAG]) ?? '';
 }

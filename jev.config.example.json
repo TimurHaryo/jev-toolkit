@@ -12,6 +12,7 @@
     "deepseek": {
       "baseUrl": "https://api.deepseek.com/anthropic",
       "authTokenEnv": "DEEPSEEK_API_KEY",
+      "authHeader": "bearer",
       "models": { "opus": "deepseek-reasoner", "sonnet": "deepseek-chat", "haiku": "deepseek-chat", "subagent": "deepseek-chat" },
       "pricing": {
         "deepseek-chat": { "input": 0.27, "output": 1.10, "cache_read": 0.07, "cache_write": 0.27 },
@@ -21,9 +22,10 @@
     "anthropic": {
       "baseUrl": null,
       "authTokenEnv": "ANTHROPIC_API_KEY",
+      "authHeader": "x-api-key",
       "models": { "opus": "claude-opus-5", "sonnet": "claude-sonnet-5", "haiku": "claude-haiku-4-5-20251001", "subagent": "claude-sonnet-5" },
       "pricing": {}
     }
   },
-  "benchmark": { "maxTurns": 30, "orchestratorTier": "opus", "jevInputPricePerMTok": 0.042 }
+  "benchmark": { "maxTurns": 30, "orchestratorTier": "opus", "jevInputPricePerMTok": 0.042, "isolateClaudeConfig": true }
 }

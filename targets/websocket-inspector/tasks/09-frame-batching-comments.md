@@ -5,6 +5,7 @@ gold_sections:
   - coroutines
   - room
   - comments
+  - websocket
 gold_tier: opus
 expect_files:
   - "inspector/**/ChuckerScarletWebSocket.kt"

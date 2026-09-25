@@ -19,6 +19,8 @@ function firstJsonObject(text) {
   return null;
 }
 
+const PARENT_SESSION_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT'];
+
 const inUnit = (v) => typeof v === 'number' && v >= 0 && v <= 1;
 
 export function parseJudgeAnswers(text, questions) {
@@ -43,7 +45,11 @@ export function parseJudgeAnswers(text, questions) {
 function runClaudeJson({ prompt, model, spawnImpl, env, timeoutMs }) {
   return new Promise((resolve) => {
     const args = ['-p', prompt, '--output-format', 'json', '--model', model, '--max-turns', '1'];
-    const child = spawnImpl('claude', args, { env, cwd: tmpdir(), stdio: ['ignore', 'pipe', 'ignore'] });
+    // The judge runs inside a hook of a live session; it must start as its own session, not a nested one.
+    // CLAUDE_CONFIG_DIR, when the hook env carries the isolated one, passes through unchanged.
+    const childEnv = { ...env };
+    for (const k of PARENT_SESSION_VARS) delete childEnv[k];
+    const child = spawnImpl('claude', args, { env: childEnv, cwd: tmpdir(), stdio: ['ignore', 'pipe', 'ignore'] });
     let out = '';
     let done = false;
     const timer = setTimeout(() => { if (!done) { done = true; child.kill(); resolve({ ok: false, reason: 'judge_timeout' }); } }, timeoutMs);

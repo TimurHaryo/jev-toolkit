@@ -81,3 +81,16 @@ test('makeJudgeDecide honours timeoutMs', async () => {
   const r = await d('echo', { text: 'yes' }, { config: { logDir: dir } });
   assert.equal(r.reason, 'judge_timeout');
 });
+
+test('judge never passes the parent session markers to its claude child and keeps an isolated config dir', async () => {
+  const out = JSON.stringify({ result: '{"narrates_0": 0.1, "kind_0": {"choice": "reason", "confidence": 0.7}}', usage: {} });
+  const env = { CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CONFIG_DIR: '/tk/.claude-config', KEEP: 'y' };
+  const r = await judge({ state: {}, questions, model: 'm', spawnImpl: fakeSpawn({ stdout: out }), env });
+  assert.equal(r.ok, true);
+  const seen = fakeSpawn.last.opts.env;
+  assert.equal('CLAUDECODE' in seen, false);
+  assert.equal('CLAUDE_CODE_ENTRYPOINT' in seen, false);
+  assert.equal(seen.CLAUDE_CONFIG_DIR, '/tk/.claude-config');
+  assert.equal(seen.KEEP, 'y');
+  assert.equal(env.CLAUDECODE, '1');
+});

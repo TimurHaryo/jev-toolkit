@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { runBenchmark } from '../src/bench/runner.mjs';
+import { runBenchmark, ALLOWED_TOOLS } from '../src/bench/runner.mjs';
 import { DEFAULTS, toolkitRoot } from '../src/client/config.mjs';
 
 async function target() {
@@ -76,6 +76,10 @@ test('a run resets, installs, verifies, runs claude, and writes manifest, raw, d
   assert.equal(rec.quality.compile, null);
   const manifest = JSON.parse(await readFile(join(s.work, 'results', 'run1', 'manifest.json'), 'utf8'));
   assert.equal(manifest.provider, 'deepseek');
+  assert.deepEqual(manifest.question_versions, { 'comment-policy': '1', 'dynamic-context': '1', 'handback-check': '1', 'model-router': '1' });
+  assert.equal(rec.diff.expect_files_hit, null);
+  assert.equal(rec.jev.ok_calls, 1);
+  assert.deepEqual(rec.jev.reasons, {});
   assert.ok((await readFile(rec.raw_result_path, 'utf8')).includes('"type":"result"'));
   assert.match(await readFile(rec.diff_path, 'utf8'), /val x = 1/);
   const files = await readdir(join(s.tgt, 'src'));
@@ -84,6 +88,9 @@ test('a run resets, installs, verifies, runs claude, and writes manifest, raw, d
   assert.equal(call.opts.cwd, s.tgt);
   assert.equal(call.opts.env.ANTHROPIC_AUTH_TOKEN, 'tok');
   assert.equal(call.opts.env.JEV_RUN_ID, 'run1');
+  assert.equal(call.opts.env.CLAUDE_CONFIG_DIR, join(toolkitRoot(), '.claude-config'));
+  assert.equal('CLAUDECODE' in call.opts.env, false);
+  assert.equal(call.args[call.args.indexOf('--allowedTools') + 1], ALLOWED_TOOLS);
   assert.ok(call.args.includes('deepseek-reasoner'));
   assert.match(await readFile(join(s.tgt, 'CLAUDE.md'), 'utf8'), /injected per task by the JEV dynamic-context hook/);
 });
@@ -126,13 +133,14 @@ test('onChild receives the spawned claude process so a signal handler can kill i
 
 test('native Anthropic runs never inherit a base URL from the caller environment', async () => {
   const s = await setup();
-  const native = { ...provider, name: 'anthropic', baseUrl: null, authTokenEnv: 'ANTHROPIC_API_KEY' };
+  const native = { ...provider, name: 'anthropic', baseUrl: null, authTokenEnv: 'ANTHROPIC_API_KEY', authHeader: 'x-api-key' };
   fakeClaude.calls = [];
-  const r = await runBenchmark(base(s, { provider: native, spawnImpl: fakeClaude(s.stream), env: { ANTHROPIC_BASE_URL: 'https://leak', ANTHROPIC_API_KEY: 'k', PATH: process.env.PATH } }));
+  const r = await runBenchmark(base(s, { provider: native, spawnImpl: fakeClaude(s.stream), env: { ANTHROPIC_BASE_URL: 'https://leak', ANTHROPIC_API_KEY: 'k', ANTHROPIC_AUTH_TOKEN: 'stale', PATH: process.env.PATH } }));
   assert.deepEqual(r.failures, []);
   const call = fakeClaude.calls[0];
   assert.equal(Object.hasOwn(call.opts.env, 'ANTHROPIC_BASE_URL'), false);
-  assert.equal(call.opts.env.ANTHROPIC_AUTH_TOKEN, 'k');
+  assert.equal(call.opts.env.ANTHROPIC_API_KEY, 'k');
+  assert.equal(Object.hasOwn(call.opts.env, 'ANTHROPIC_AUTH_TOKEN'), false);
 });
 
 test('the llm arm counts judge lines and prices their usage', async () => {
@@ -146,4 +154,47 @@ test('the llm arm counts judge lines and prices their usage', async () => {
   assert.equal(rec.jev.est_tokens, 0);
   assert.equal(rec.jev.judge_usage['deepseek-chat'].input_tokens, 2000);
   assert.equal(rec.jev.cost_usd.toFixed(8), (2000 / 1e6 * 1 + 100 / 1e6 * 2).toFixed(8));
+});
+
+test('side-channel lines are split into ok calls and a failure-reason histogram', async () => {
+  const s = await setup();
+  await mkdir(s.logDir, { recursive: true });
+  await writeFile(join(s.logDir, 'dynamic-context.jsonl'), [
+    { area: 'dynamic-context', sessionId: 'sess-1', ok: true, latencyMs: 100, estTokens: 500 },
+    { area: 'dynamic-context', sessionId: 'sess-1', ok: false, reason: 'timeout', latencyMs: 3000, estTokens: 0 },
+  ].map((l) => JSON.stringify(l)).join('\n') + '\n');
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(s.stream) }));
+  assert.deepEqual(r.failures, []);
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.jev.calls, 2);
+  assert.equal(rec.jev.ok_calls, 1);
+  assert.deepEqual(rec.jev.reasons, { timeout: 1 });
+});
+
+test('an unpriced judge model leaves the side-channel cost null and keeps the warning', async () => {
+  const s = await setup();
+  await mkdir(s.logDir, { recursive: true });
+  await writeFile(join(s.logDir, 'comment-policy-llm.jsonl'), JSON.stringify({ area: 'comment-policy', model: 'mystery-model', sessionId: 'sess-1', ok: true, latencyMs: 900, usage: { input_tokens: 2000, output_tokens: 100 } }) + '\n');
+  const r = await runBenchmark(base(s, { area: 'comment-policy', arm: 'llm', spawnImpl: fakeClaude(s.stream) }));
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.jev.cost_usd, null);
+  assert.ok(rec.cost_warnings.some((w) => /mystery-model/.test(w)));
+});
+
+test('config isolation off leaves CLAUDE_CONFIG_DIR alone; expect_files_hit is the fraction of globs a changed path matched', async () => {
+  const s = await setup();
+  await writeFile(join(s.tasksDir, '01-a.md'), '---\nid: 01-a\ncategory: one-file\ngold_sections: []\ngold_tier: sonnet\nexpect_files:\n  - "src/*.kt"\n  - "docs/**/x.md"\nneeds_subagent: false\n---\nEdit A.\n');
+  fakeClaude.calls = [];
+  const config = { ...s.config, benchmark: { ...s.config.benchmark, isolateClaudeConfig: false } };
+  const r = await runBenchmark(base(s, { config, spawnImpl: fakeClaude(s.stream, { edit: true }) }));
+  assert.deepEqual(r.failures, []);
+  const env = fakeClaude.calls[0].opts.env;
+  assert.notEqual(env.CLAUDE_CONFIG_DIR, join(toolkitRoot(), '.claude-config'));
+  assert.equal(env.CLAUDE_CONFIG_DIR, process.env.CLAUDE_CONFIG_DIR);
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.diff.expect_files_hit, 0.5);
+});
+
+test('ALLOWED_TOOLS grants only read-only git subcommands', () => {
+  assert.equal(ALLOWED_TOOLS, 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff *),Bash(git status *),Bash(git log *),Bash(git show *),Bash(./gradlew *),Agent');
 });

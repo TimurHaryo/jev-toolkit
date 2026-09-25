@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { assertTarget, resetTarget, diffStat } from '../src/bench/target.mjs';
+import { assertTarget, resetTarget, diffStat, diffText } from '../src/bench/target.mjs';
 
 async function repo() {
   const dir = await mkdtemp(join(tmpdir(), 'jevtgt-'));
@@ -31,7 +31,7 @@ test('resetTarget discards tracked edits and untracked files; diffStat sees chan
   await writeFile(join(dir, 'src', 'New.kt'), 'class New\n');
   const d = diffStat({ targetDir: dir });
   assert.deepEqual(d.files.sort(), ['src/A.kt', 'src/New.kt']);
-  assert.equal(d.insertions, 1);
+  assert.equal(d.insertions, 2);
   assert.equal(d.deletions, 1);
   const r = resetTarget({ targetDir: dir });
   assert.match(r.head, /^[0-9a-f]{7,}$/);
@@ -42,4 +42,25 @@ test('assertTarget refuses a subdirectory of a repository even when it is an all
   const dir = await repo();
   const sub = join(dir, 'src');
   assert.throws(() => assertTarget({ targetDir: sub, allowedRoots: [sub] }), /root of its git repository/);
+});
+
+test('diffText and diffStat include a brand-new untracked file', async () => {
+  const dir = await repo();
+  await writeFile(join(dir, 'src', 'Fresh.kt'), 'class Fresh\nval y = 2\n');
+  const text = diffText({ targetDir: dir });
+  assert.match(text, /\+class Fresh/);
+  assert.match(text, /\+val y = 2/);
+  const d = diffStat({ targetDir: dir });
+  assert.deepEqual(d.files, ['src/Fresh.kt']);
+  assert.equal(d.insertions, 2);
+  resetTarget({ targetDir: dir });
+  assert.deepEqual(diffStat({ targetDir: dir }), { files: [], insertions: 0, deletions: 0 });
+});
+
+test('assertTarget resolves symlinks before the allowedRoots check', async () => {
+  const outside = await repo();
+  const allowed = await mkdtemp(join(tmpdir(), 'jevallowed-'));
+  const link = join(allowed, 'link');
+  await symlink(outside, link);
+  assert.throws(() => assertTarget({ targetDir: link, allowedRoots: [allowed] }), /allowedRoots/);
 });

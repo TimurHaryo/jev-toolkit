@@ -5,3 +5,4 @@ logs/
 results/**/*.claude.jsonl
 .DS_Store
 .superpowers/
+.claude-config/

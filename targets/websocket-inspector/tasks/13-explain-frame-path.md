@@ -5,6 +5,7 @@ gold_sections:
   - websocket
   - room
   - architecture
+  - compose
 gold_tier: sonnet
 expect_files: []
 needs_subagent: false

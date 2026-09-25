@@ -3,16 +3,20 @@ import { join } from 'node:path';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { toolkitRoot } from '../client/config.mjs';
 import { installArm, verifyInstall } from '../targets/install.mjs';
-import { armEnv } from './providers.mjs';
+import { headlessEnv } from './providers.mjs';
 import { runClaude, parseStream, extractResult } from './claude-run.mjs';
 import { assertTarget, resetTarget } from './target.mjs';
 import { listCards } from './quality.mjs';
 import { ALLOWED_TOOLS } from './runner.mjs';
 
+const commentProbe = (file) => `Create the file ${file} with exactly these two lines and nothing else:\n// increment counter\nval counter = 0\nThen stop.`;
+
+/** The first three run under all-jev; `llm` runs under comment-policy-llm. */
 export const PROBES = [
   { name: 'context', prompt: 'Reply with the single word READY and use no tools.' },
-  { name: 'comment', prompt: 'Create the file src/JevProbe.kt with exactly these two lines and nothing else:\n// increment counter\nval counter = 0\nThen stop.' },
+  { name: 'comment', prompt: commentProbe('src/JevProbe.kt') },
   { name: 'agent', prompt: 'Use the Agent tool once, in the foreground, with subagent_type general-purpose and this prompt: "Count the Kotlin files under this directory and reply with the number." Then reply with the number it returned.' },
+  { name: 'llm', prompt: commentProbe('src/JevProbeLlm.kt') },
 ];
 
 async function linesFor(logDir, area, sessionId) {
@@ -43,30 +47,39 @@ export async function assessProbes({ logDir, sessions, cardsBefore }) {
   let facts = false; let detail = 'no card';
   if (fresh.length) { const text = await readFile(join(cardsDir, fresh[0]), 'utf8'); const line = text.split('\n').find((l) => l.startsWith('Facts:')) ?? ''; facts = /attribution snapshot/.test(line); detail = line || 'no Facts line'; }
   checks.push({ name: 'hand-back card has facts', ok: facts, detail });
+  const llm = await linesFor(logDir, 'comment-policy-llm', sid(sessions.llm));
+  checks.push({ name: 'comment-policy llm hook fired', ok: llm.length > 0, detail: llm.length ? `${llm.length} line(s)` : noLineDetail(sessions.llm) });
+  const llmOk = llm.find((l) => l.ok === true);
+  checks.push({ name: 'comment-policy llm judge ok', ok: Boolean(llmOk), detail: llmOk ? 'ok' : (llm.map((l) => l.reason).filter(Boolean).join(', ') || 'no call') });
   return { checks };
 }
 
-/** Installs all-jev, runs three tiny sessions, and reports whether each hook actually fired against the real API. */
+async function installVerified(args) {
+  await installArm(args);
+  const v = await verifyInstall(args);
+  if (!v.ok) throw new Error(`install drift: ${v.problems.join('; ')}`);
+}
+
+/** Installs all-jev and runs three tiny sessions, then comment-policy-llm and one more; reports whether each hook fired against the real API. */
 export async function checkHooks({ targetDir, config, provider, env, spawnImpl = nodeSpawn, runGitImpl, log = () => {} }) {
   assertTarget({ targetDir, allowedRoots: config.allowedRoots, runGitImpl });
   const base = join(toolkitRoot(), 'targets', 'websocket-inspector');
-  const args = { targetDir, armFile: join(base, 'arms', 'all-jev.json'), rulesDir: join(base, 'rules'), toolkitPath: toolkitRoot() };
-  const runEnv = { ...process.env, ...env, ...armEnv({ provider, env, runId: 'hooks-check', logDir: config.logDir }) };
-  // A native Anthropic run must not be redirected by a base URL left in the caller's environment.
-  if (!provider.baseUrl) delete runEnv.ANTHROPIC_BASE_URL;
+  const armArgs = (arm) => ({ targetDir, armFile: join(base, 'arms', `${arm}.json`), rulesDir: join(base, 'rules'), toolkitPath: toolkitRoot() });
+  const runEnv = headlessEnv({ provider, config, env, runId: 'hooks-check' });
   resetTarget({ targetDir, runGitImpl });
   const sessions = {};
   let cardsBefore;
+  const probe = async (p) => {
+    log(`probe ${p.name}`);
+    const run = await runClaude({ cwd: targetDir, prompt: p.prompt, model: provider.models.sonnet, maxTurns: 6, allowedTools: ALLOWED_TOOLS, env: runEnv, spawnImpl, timeoutMs: 5 * 60 * 1000 });
+    sessions[p.name] = { session_id: extractResult(parseStream(run.stdout).result).session_id, code: run.code, timedOut: run.timedOut };
+  };
   try {
-    await installArm(args);
-    const v = await verifyInstall(args);
-    if (!v.ok) throw new Error(`install drift: ${v.problems.join('; ')}`);
+    await installVerified(armArgs('all-jev'));
     cardsBefore = await listCards(join(config.logDir, 'handback'));
-    for (const probe of PROBES) {
-      log(`probe ${probe.name}`);
-      const run = await runClaude({ cwd: targetDir, prompt: probe.prompt, model: provider.models.sonnet, maxTurns: 6, allowedTools: ALLOWED_TOOLS, env: runEnv, spawnImpl, timeoutMs: 5 * 60 * 1000 });
-      sessions[probe.name] = { session_id: extractResult(parseStream(run.stdout).result).session_id, code: run.code, timedOut: run.timedOut };
-    }
+    for (const p of PROBES.filter((x) => x.name !== 'llm')) await probe(p);
+    await installVerified(armArgs('comment-policy-llm'));
+    await probe(PROBES.find((x) => x.name === 'llm'));
   } finally {
     resetTarget({ targetDir, runGitImpl });
   }

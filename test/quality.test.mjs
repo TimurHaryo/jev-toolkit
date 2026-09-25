@@ -64,3 +64,8 @@ test('readFullDiffAfterAgent ignores a git diff run inside the subagent', async 
   const onlyNested = events.filter((e) => !(e.type === 'assistant' && !e.parent_tool_use_id && JSON.stringify(e).includes('git diff')));
   assert.equal(readFullDiffAfterAgent(onlyNested), false);
 });
+
+test('isFullDiffCommand looks at every segment of a compound command and at git show / git log -p', () => {
+  for (const c of ['git diff --stat && git diff', 'git show HEAD', 'git log -p -1', 'git status; git --no-pager log --patch', 'cd x || git show']) assert.equal(isFullDiffCommand(c), true, c);
+  for (const c of ['git log --oneline', 'git diff --stat | head', 'git show --stat HEAD', 'git status && git log -3']) assert.equal(isFullDiffCommand(c), false, c);
+});
