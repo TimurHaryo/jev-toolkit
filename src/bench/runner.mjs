@@ -17,7 +17,7 @@ import { version as handbackCheckVersion } from '../questions/handback-check.mjs
 import { version as modelRouterVersion } from '../questions/model-router.mjs';
 
 // Read-only git only: a session must not commit, reset, or check out in the target.
-export const ALLOWED_TOOLS = 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff *),Bash(git status *),Bash(git log *),Bash(git show *),Bash(./gradlew *),Agent';
+export const ALLOWED_TOOLS = 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff),Bash(git diff *),Bash(git status),Bash(git status *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(./gradlew *),Agent';
 
 export const QUESTION_VERSIONS = Object.freeze({ 'comment-policy': commentPolicyVersion, 'dynamic-context': dynamicContextVersion, 'handback-check': handbackCheckVersion, 'model-router': modelRouterVersion });
 

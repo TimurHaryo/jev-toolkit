@@ -196,5 +196,5 @@ test('config isolation off leaves CLAUDE_CONFIG_DIR alone; expect_files_hit is t
 });
 
 test('ALLOWED_TOOLS grants only read-only git subcommands', () => {
-  assert.equal(ALLOWED_TOOLS, 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff *),Bash(git status *),Bash(git log *),Bash(git show *),Bash(./gradlew *),Agent');
+  assert.equal(ALLOWED_TOOLS, 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff),Bash(git diff *),Bash(git status),Bash(git status *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(./gradlew *),Agent');
 });
