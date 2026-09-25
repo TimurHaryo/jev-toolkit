@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { appendLog } from '../client/log.mjs';
 
 const TAIL = 'Reply with ONLY a JSON object. For each noul id give a number in [0,1]. For each choice id give {"choice": <option>, "confidence": <0..1>}. No prose.';
@@ -42,11 +43,12 @@ export function parseJudgeAnswers(text, questions) {
 function runClaudeJson({ prompt, model, spawnImpl, env, timeoutMs }) {
   return new Promise((resolve) => {
     const args = ['-p', prompt, '--output-format', 'json', '--model', model, '--max-turns', '1'];
-    const child = spawnImpl('claude', args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnImpl('claude', args, { env, cwd: tmpdir(), stdio: ['ignore', 'pipe', 'ignore'] });
     let out = '';
     let done = false;
     const timer = setTimeout(() => { if (!done) { done = true; child.kill(); resolve({ ok: false, reason: 'judge_timeout' }); } }, timeoutMs);
-    child.stdout.on('data', (d) => { out += d; });
+    child.stdout.setEncoding?.('utf8');
+    child.stdout.on('data', (d) => { out += String(d); });
     child.on('error', (e) => { if (!done) { done = true; clearTimeout(timer); resolve({ ok: false, reason: 'judge_spawn', detail: e.message }); } });
     child.on('close', (code) => {
       if (done) return;
@@ -68,13 +70,13 @@ export async function judge({ state, questions, model, spawnImpl = nodeSpawn, en
 }
 
 /** A drop-in for decide(): same signature, answers come from the LLM judge instead of Jev. */
-export function makeJudgeDecide({ model, spawnImpl, env, loadArea = (area) => import(`../questions/${area}.mjs`) }) {
+export function makeJudgeDecide({ model, spawnImpl, env, loadArea = (area) => import(`../questions/${area}.mjs`), timeoutMs = Number(env?.JEV_JUDGE_TIMEOUT_MS) || 75000 }) {
   return async (area, state, ctx = {}) => {
     const started = Date.now();
     let result;
     try {
       const mod = await loadArea(area);
-      result = await judge({ state, questions: mod.buildQuestions(state), model, spawnImpl, env });
+      result = await judge({ state, questions: mod.buildQuestions(state), model, spawnImpl, env, timeoutMs });
     } catch (e) {
       result = { ok: false, reason: 'internal', detail: e?.message };
     }

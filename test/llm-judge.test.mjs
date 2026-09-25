@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { tmpdir } from 'node:os';
 import { buildJudgePrompt, parseJudgeAnswers, judge, makeJudgeDecide } from '../src/bench/llm-judge.mjs';
 import { noul, choice } from '../src/client/schema.mjs';
 
@@ -49,6 +50,7 @@ test('judge spawns claude -p with the model and returns answers plus usage', asy
   assert.ok(fakeSpawn.last.args.includes('--model') && fakeSpawn.last.args.includes('v3'));
   assert.ok(fakeSpawn.last.args.includes('--output-format') && fakeSpawn.last.args.includes('json'));
   assert.equal(fakeSpawn.last.opts.env.X, '1');
+  assert.equal(fakeSpawn.last.opts.cwd, tmpdir());
 });
 
 test('judge reports exit code, timeout, and unparsable output', async () => {
@@ -65,4 +67,12 @@ test('makeJudgeDecide has decide()\'s signature and builds questions from the ar
   const r = await d('echo', { text: 'yes' }, { config: { logDir: dir } });
   assert.equal(r.ok, true);
   assert.equal(r.answers.yes.noul, 0.7);
+});
+
+test('makeJudgeDecide honours timeoutMs', async () => {
+  const d = makeJudgeDecide({ model: 'm', spawnImpl: fakeSpawn({ stdout: 'x', delayMs: 200 }), env: {}, loadArea: () => import('./fixtures/questions/echo-area.mjs'), timeoutMs: 20 });
+  const { mkdtemp } = await import('node:fs/promises'); const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'jevjudge-'));
+  const r = await d('echo', { text: 'yes' }, { config: { logDir: dir } });
+  assert.equal(r.reason, 'judge_timeout');
 });

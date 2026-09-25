@@ -5,5 +5,5 @@ import { makeJudgeDecide } from '../../bench/llm-judge.mjs';
 export function runCommentPolicyLlm(input, opts = {}) {
   const env = opts.env ?? process.env;
   const model = opts.model ?? env.JEV_JUDGE_MODEL ?? env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? 'haiku';
-  return runCommentPolicy(input, { ...opts, decideImpl: makeJudgeDecide({ model, spawnImpl: opts.spawnImpl, env }) });
+  return runCommentPolicy(input, { ...opts, decideImpl: makeJudgeDecide({ model, spawnImpl: opts.spawnImpl, env, timeoutMs: opts.timeoutMs }) });
 }

@@ -3,7 +3,7 @@
   "rules": "jev",
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Edit|Write|MultiEdit", "bin": "jev-hook-comment-policy-llm.mjs", "timeout": 10, "statusMessage": "LLM comment policy" }
+      { "matcher": "Edit|Write|MultiEdit", "bin": "jev-hook-comment-policy-llm.mjs", "timeout": 90, "statusMessage": "LLM comment policy" }
     ]
   }
 }
