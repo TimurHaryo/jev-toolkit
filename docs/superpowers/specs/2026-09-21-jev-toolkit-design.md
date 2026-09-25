@@ -419,7 +419,7 @@ model name; unknown models produce `null` and a warning, never a guess.
 ### 10.5 Reporter
 
 `node bin/jev-report.mjs --run-id <id> [--compare <other-run-id>]` prints one markdown table
-per area: arms as columns; rows for median and p90 of input tokens, cache-read tokens, output
+per area: arms as columns; rows for median (mean of the two middle values for even counts) and p90 (nearest rank) of input tokens, cache-read tokens, output
 tokens, cost, duration, turns; then quality rows; then Jev rows: calls per task, median latency,
 total Jev cost. A final section lists excluded runs (truncated, failed, `ok: false`) with reasons.
 `--compare` puts two runs side by side, for the DeepSeek versus Claude calibration.
@@ -450,6 +450,7 @@ comments, 25 summaries, 30 briefs, 20 prompts against the 10 sections.
 
 ## 12. RUNBOOK.md contents
 
+The runbook is `RUNBOOK.md` at the repo root (plan 3); the list below is its outline.
 Written for the personal device, no chat context assumed:
 
 1. Prerequisites: Node 20+, Claude Code installed, DeepSeek or Qwen key, TypeSafe key, `git`.

@@ -11,7 +11,8 @@ Plans: `docs/superpowers/plans/`.
 Plan 1 done: client, smoke, comment-policy hook, fixtures, accuracy script.
 Plan 2 done: WebSocket Inspector target repo, rule sections, `jev-install`, dynamic-context hook,
 hand-back check (PreToolUse snapshot + PostToolUse card), model-router CLI and skill, fixtures.
-Plan 3 (benchmark runner, reporter, runbook) follows.
+Plan 3 done: providers and pricing, LLM judge arm, benchmark runner, reporter, first-contact hook
+check, RUNBOOK.md.
 
 ## Setup on a device that has a TypeSafe key
 
@@ -50,6 +51,11 @@ The hand-back check runs as PreToolUse and PostToolUse hooks on the `Agent` tool
 reaches the parent agent. Subagents must run in the foreground for the card to carry their changes;
 a background dispatch is skipped.
 
+## Benchmark
+
+See `RUNBOOK.md`. Results are committed per run under `results/<run-id>/`; raw transcripts
+(`*.claude.jsonl`) stay local.
+
 ## Route a brief
 
     node bin/jev-route.mjs --brief /path/to/brief.md
@@ -60,7 +66,7 @@ a background dispatch is skipped.
     src/questions   one module per area: buildQuestions, truncate, thresholds, version
     src/adapters    hooks and CLIs, thin; pure decision logic in its own module
     src/targets     rule loading, CLAUDE.md variants, jev-install
-    src/bench       accuracy scoring (runner and reporter arrive in plan 3)
+    src/bench       providers, pricing, LLM judge, headless runner, results, quality, report, hooks check
     fixtures        labeled cases and recorded responses
     skills          model-router SKILL.md
-    targets         per-target rule sections and benchmark arms
+    targets         per-target rule sections, benchmark arms, and task prompts with gold labels
