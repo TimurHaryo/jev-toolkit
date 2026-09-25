@@ -10,8 +10,9 @@ const SUMMARY_ONLY = /--(?:stat|numstat|shortstat|name-only|name-status)\b/;
 
 /** A command that shows the diff body, not just a summary of it. */
 export function isFullDiffCommand(command) {
-  const c = String(command ?? '');
-  return GIT_DIFF.test(c) && !SUMMARY_ONLY.test(c);
+  // Quoted segments (e.g. `-C "/path with space"`) collapse to one token so the option grammar still matches.
+  const normalised = String(command ?? '').replace(/"[^"]*"|'[^']*'/g, 'Q');
+  return GIT_DIFF.test(normalised) && !SUMMARY_ONLY.test(normalised);
 }
 
 export function goldSectionsScore(injected, gold) {

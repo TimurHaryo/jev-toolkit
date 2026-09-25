@@ -55,6 +55,8 @@ test('readFullDiffAfterAgent anchors on the first non-excluded Agent call, not a
 test('isFullDiffCommand accepts diff bodies with git global options and rejects summaries', () => {
   for (const c of ['git diff', 'git diff HEAD~1', 'git --no-pager diff', 'git -C /t diff']) assert.equal(isFullDiffCommand(c), true, c);
   for (const c of ['git diff --stat', 'git diff --name-only', 'git status', 'gitk diff']) assert.equal(isFullDiffCommand(c), false, c);
+  for (const c of ['git -C "/some path" diff', "git -C '/Users/x/Project/WebSocket Inspector' diff"]) assert.equal(isFullDiffCommand(c), true, c);
+  assert.equal(isFullDiffCommand('git diff -- "src/A.kt" --stat'), false);
 });
 
 test('readFullDiffAfterAgent ignores a git diff run inside the subagent', async () => {
