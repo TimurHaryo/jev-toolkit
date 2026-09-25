@@ -64,7 +64,7 @@ function killGroup(child, signal) {
  * On timeout: SIGTERM to the process group, SIGKILL after graceMs, and resolve on close or graceMs
  * after the SIGKILL, so a reset of the target never races a still-running session.
  */
-export function runClaude({ cwd, prompt, model, maxTurns, allowedTools, env, spawnImpl = nodeSpawn, killImpl = killGroup, timeoutMs = 20 * 60 * 1000, graceMs = 5000, rawOutPath }) {
+export function runClaude({ cwd, prompt, model, maxTurns, allowedTools, env, spawnImpl = nodeSpawn, killImpl = killGroup, timeoutMs = 20 * 60 * 1000, graceMs = 5000, rawOutPath, onChild = () => {} }) {
   return new Promise((resolve) => {
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-turns', String(maxTurns), '--permission-mode', 'acceptEdits', '--allowedTools', allowedTools];
     let child;
@@ -74,6 +74,7 @@ export function runClaude({ cwd, prompt, model, maxTurns, allowedTools, env, spa
       resolve({ code: null, stdout: '', stderr: e.message, timedOut: false });
       return;
     }
+    onChild(child);
     let stdout = ''; let stderr = ''; let timedOut = false; let done = false;
     const timers = [];
     const finish = async (code) => {

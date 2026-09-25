@@ -8,7 +8,7 @@ function parseValue(raw) {
   return v.replace(/^"(.*)"$/, '$1');
 }
 
-/** Parses the small YAML subset used by rule files: scalars and a list of quoted strings. */
+/** Parses the small YAML subset used by rule and task files: scalars, booleans, and lists of strings. Extra keys are kept on `meta`. */
 export function parseFrontmatter(text) {
   const lines = text.split('\n');
   if (lines[0].trim() !== FENCE) throw new Error('frontmatter: document must start with ---');
@@ -27,5 +27,5 @@ export function parseFrontmatter(text) {
     meta[key] = parseValue(raw);
   }
   if (!meta.id) throw new Error('frontmatter: missing id');
-  return { meta: { id: meta.id, summary: meta.summary ?? '', paths: meta.paths ?? [], always: meta.always === true }, body: lines.slice(end + 1).join('\n') };
+  return { meta: { ...meta, id: meta.id, summary: meta.summary ?? '', paths: meta.paths ?? [], always: meta.always === true }, body: lines.slice(end + 1).join('\n') };
 }
