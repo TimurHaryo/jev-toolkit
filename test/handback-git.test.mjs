@@ -87,3 +87,13 @@ test('mentionedNotInDiff finds paths the summary names that the diff does not co
   assert.deepEqual(mentionedNotInDiff('no files here', facts), []);
   assert.deepEqual(mentionedNotInDiff('fixed ../src/A.kt', { filesChanged: ['src/A.kt'] }), []);
 });
+
+test('mentionedNotInDiff normalises absolute and elided mentions of changed files', () => {
+  const facts = { filesChanged: ['app/src/main/x/Y.kt', 'src/A.kt'] };
+  const cwd = '/tmp/repo';
+  assert.deepEqual(mentionedNotInDiff('Edited /tmp/repo/src/A.kt', facts, { cwd }), []);
+  assert.deepEqual(mentionedNotInDiff('Edited /tmp/repo/src/A.kt', facts), []);
+  assert.deepEqual(mentionedNotInDiff('Edited .../x/Y.kt and …/main/x/Y.kt', facts, { cwd }), []);
+  assert.deepEqual(mentionedNotInDiff('Edited ./../../src/A.kt', facts, { cwd }), []);
+  assert.deepEqual(mentionedNotInDiff('Read /tmp/repo/src/Other.kt and edited src/A.kt', facts, { cwd }), ['src/Other.kt']);
+});

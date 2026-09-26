@@ -41,7 +41,8 @@ test('pre snapshot then post: card attributes only the subagent changes and flag
   assert.match(card, /files changed 1 \(src\/A\.kt\)/);
   assert.match(card, /attribution snapshot/);
   assert.match(card, /claims tests added; no test files changed/);
-  assert.match(card, /mentions ATest\.kt which is not in the diff/);
+  assert.doesNotMatch(card, /mentions /);
+  assert.match(card, /^Mentioned but unchanged: ATest\.kt$/m);
   assert.match(card, /Read full diff: yes/);
   assert.equal(await readFile(join(config.logDir, 'handback', 'tu1.card.md'), 'utf8'), card);
   await assert.rejects(stat(join(config.logDir, 'handback', 'tu1.start.json')));
@@ -61,7 +62,17 @@ test('Jev failure still yields a card with facts and code-only flags', async () 
   const r = await runHandbackPost(post(dir, 'Edited src/A.kt and Zed.kt', { tool_use_id: 'tu3' }), { config: cfg(dir), fetchImpl: async () => { throw new TypeError('down'); } });
   const card = r.output.hookSpecificOutput.additionalContext;
   assert.match(card, /Claims: unavailable \(Jev network\)/);
-  assert.match(card, /mentions Zed\.kt which is not in the diff/);
+  assert.match(card, /^Flags: none$/m);
+  assert.match(card, /^Mentioned but unchanged: Zed\.kt$/m);
+});
+
+test('an absolute-path mention of a changed file is not listed as unchanged', async () => {
+  const dir = await repo();
+  await writeFile(join(dir, 'src', 'A.kt'), 'class A6\n');
+  const r = await runHandbackPost(post(dir, `Edited ${join(dir, 'src', 'A.kt')}.`, { tool_use_id: 'tu8' }), { config: cfg(dir), fetchImpl: fetchWith({ ...ALL, claims_tests_added: 0.05 }) });
+  const card = r.output.hookSpecificOutput.additionalContext;
+  assert.match(card, /^Mentioned but unchanged: none$/m);
+  assert.match(card, /^Flags: none$/m);
 });
 
 test('excluded subagent types, non-git cwd, disabled, and foreign cwd yield null', async () => {

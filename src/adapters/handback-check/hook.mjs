@@ -5,7 +5,7 @@ import { isAllowedRoot } from '../../client/guard.mjs';
 import { decide } from '../../client/jev-client.mjs';
 import { thresholds } from '../../questions/handback-check.mjs';
 import { isGitRepo } from './git.mjs';
-import { collectFacts } from './facts.mjs';
+import { collectFacts, mentionedNotInDiff } from './facts.mjs';
 import { flagsFor, renderCard } from './card.mjs';
 import { summaryFromResponse } from './response.mjs';
 import { AGENT_TOOLS, EXCLUDED, skipLog, snapshotPath } from './pre-hook.mjs';
@@ -56,9 +56,10 @@ export async function runHandbackPost(input, opts = {}) {
 
     const r = await decideImpl(AREA, { summary, agent_type: agentType }, { cwd, sessionId: input.session_id ?? null, config, fetchImpl });
     const answers = r.ok ? r.answers : null;
-    const flags = flagsFor({ answers, facts, thresholds, summary });
+    const flags = flagsFor({ answers, facts, thresholds });
+    const mentioned = mentionedNotInDiff(summary, facts, { cwd });
     const model = input.tool_input?.model ?? env.CLAUDE_CODE_SUBAGENT_MODEL ?? undefined;
-    const card = renderCard({ agentType, model, flags, facts, answers, reason: r.ok ? undefined : r.reason });
+    const card = renderCard({ agentType, model, flags, facts, answers, reason: r.ok ? undefined : r.reason, mentioned });
 
     try {
       await mkdir(join(config.logDir, 'handback'), { recursive: true });

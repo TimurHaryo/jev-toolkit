@@ -4,7 +4,9 @@ import { runGit, isGitRepo } from './git.mjs';
 import { takeSnapshot, diffSnapshots, dirtyPaths } from './snapshot.mjs';
 
 const TEST_PATH = /(\/test\/|\/androidTest\/|Test\.kt$)/;
-const PATH_IN_TEXT = /[\w./-]+\.(?:kt|kts|gradle|xml|md|mjs|json)\b/g;
+// An optional leading "…/" is captured so it can be stripped like ".../".
+const PATH_IN_TEXT = /(?:…\/)?[\w./-]+\.(?:kt|kts|gradle|xml|md|mjs|json)\b/g;
+const RELATIVE_PREFIX = /^(?:\.\.\.\/|…\/|\.\.?\/)+/;
 
 /** NUL-separated for the same reason as dirtyPaths: a space in a path would otherwise be quoted. */
 function untrackedPaths(cwd) {
@@ -48,8 +50,17 @@ export function collectFacts(cwd, { before } = {}) {
   };
 }
 
-/** File paths the summary names that no changed path ends with. */
-export function mentionedNotInDiff(summary, facts) {
-  const mentioned = [...new Set((summary.match(PATH_IN_TEXT) ?? []).map((m) => m.replace(/^(\.\.?\/)+/, '')))];
-  return mentioned.filter((m) => !facts.filesChanged.some((f) => f === m || f.endsWith(`/${m}`)));
+/** Repo-relative form of a mention: drops a leading cwd and any ./, ../, .../ or …/ prefixes. */
+function normaliseMention(mention, cwd) {
+  const root = cwd ? cwd.replace(/\/+$/, '') : '';
+  const local = root && mention.startsWith(`${root}/`) ? mention.slice(root.length + 1) : mention;
+  return local.replace(RELATIVE_PREFIX, '');
+}
+
+const matchesChanged = (m, f) => f === m || f.endsWith(`/${m}`) || m.endsWith(`/${f}`);
+
+/** File paths the summary names that match no changed path. Information for the card, not a flag. */
+export function mentionedNotInDiff(summary, facts, { cwd } = {}) {
+  const mentioned = [...new Set((summary.match(PATH_IN_TEXT) ?? []).map((m) => normaliseMention(m, cwd)))];
+  return mentioned.filter((m) => !facts.filesChanged.some((f) => matchesChanged(m, f)));
 }
