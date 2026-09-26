@@ -198,8 +198,10 @@ test('config isolation off leaves CLAUDE_CONFIG_DIR alone; expect_files_hit is t
   assert.equal(rec.diff.expect_files_hit, 0.5);
 });
 
-test('ALLOWED_TOOLS grants only read-only git subcommands', () => {
-  assert.equal(ALLOWED_TOOLS, 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff),Bash(git diff *),Bash(git status),Bash(git status *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(./gradlew *),Agent');
+test('ALLOWED_TOOLS grants read-only git and shell forms, Gradle, and nothing destructive', () => {
+  const rules = ALLOWED_TOOLS.split(',');
+  for (const r of ['Bash(git diff)', 'Bash(git --no-pager diff *)', 'Bash(git -C * diff)', 'Bash(git -C * --no-pager show *)', 'Bash(ls *)', 'Bash(cat *)', 'Bash(unzip -l *)', 'Bash(./gradlew *)', 'Agent']) assert.ok(rules.includes(r), r);
+  assert.equal(rules.some((r) => /^Bash\(git \*\)$|Bash\(git (push|add|commit|reset|checkout|tag|config|clean)|Bash\((rm|find|mv|cp|sh|bash|python3?|node) /.test(r)), false);
 });
 
 test('a run that hit the turn cap and exited 1 keeps its usage, own subtype, and exit code, and is listed as a failure', async () => {
