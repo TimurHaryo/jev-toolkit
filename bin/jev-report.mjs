@@ -5,7 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import { loadConfig, toolkitRoot } from '../src/client/config.mjs';
 import { readRun } from '../src/bench/results.mjs';
 import { resolveProvider } from '../src/bench/providers.mjs';
-import { readLabels, applyLabels, applyPricing, summarizeRun, renderReport, compareRuns } from '../src/bench/report.mjs';
+import { readLabels, applyLabels, applyPricing, repriceAll, summarizeRun, renderReport, compareRuns } from '../src/bench/report.mjs';
 
 /** The run's own provider (from its manifest), else the active one; null when neither is configured. */
 function pricingFor(config, manifest) {
@@ -18,22 +18,24 @@ function pricingFor(config, manifest) {
 
 async function main() {
   let values;
-  try { ({ values } = parseArgs({ options: { 'run-id': { type: 'string' }, compare: { type: 'string' }, labels: { type: 'string' } } })); } catch (e) { console.error(`usage error: ${e.message}`); return 1; }
-  if (!values['run-id']) { console.error('usage: jev-report --run-id <id> [--compare <id2>] [--labels <path>]'); return 1; }
+  try { ({ values } = parseArgs({ options: { 'run-id': { type: 'string' }, compare: { type: 'string' }, labels: { type: 'string' }, reprice: { type: 'boolean', default: false } } })); } catch (e) { console.error(`usage error: ${e.message}`); return 1; }
+  if (!values['run-id']) { console.error('usage: jev-report --run-id <id> [--compare <id2>] [--labels <path>] [--reprice]'); return 1; }
   const resultsDir = join(toolkitRoot(), 'results');
   const config = loadConfig();
   const load = async (id) => {
     const run = await readRun(resultsDir, id);
     const pricing = pricingFor(config, run.manifest);
-    const priced = pricing ? applyPricing(run.records, pricing, config.benchmark?.jevInputPricePerMTok ?? 0.042) : run.records;
+    // --reprice recomputes every cost with today's prices; the default only fills costs that were unknown.
+    const reprice = values.reprice ? repriceAll : applyPricing;
+    const priced = pricing ? reprice(run.records, pricing, config.benchmark?.jevInputPricePerMTok ?? 0.042) : run.records;
     const labels = await readLabels(values.labels ?? join(toolkitRoot(), 'labels', `${id}.jsonl`));
     const { records, unmatched } = applyLabels(priced, labels);
     for (const l of unmatched) console.error(`warning: label did not match any record: ${JSON.stringify(l)}`);
-    return { manifest: run.manifest, summary: summarizeRun(records) };
+    return { manifest: run.manifest, summary: summarizeRun(records), repriced: Boolean(values.reprice && pricing) };
   };
   try {
     const a = await load(values['run-id']);
-    const md = renderReport(a.manifest, a.summary);
+    const md = renderReport(a.manifest, a.summary, { repriced: a.repriced });
     process.stdout.write(md);
     await writeFile(join(resultsDir, values['run-id'], 'report.md'), md);
     if (values.compare) {

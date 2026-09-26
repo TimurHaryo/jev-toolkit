@@ -37,30 +37,40 @@ function recomputeCost(r, pricing) {
   return { cost_usd: c.cost_usd, warnings: c.warning ? [c.warning] : [] };
 }
 
+function recomputeJev(jev, pricing, jevPricePerMTok) {
+  const judge = costFromModelUsage(jev.judge_usage ?? {}, pricing);
+  const cost = judge.cost_usd === null ? null : ((jev.est_tokens ?? 0) / 1e6) * jevPricePerMTok + judge.cost_usd;
+  return { jev: { ...jev, cost_usd: cost }, warnings: judge.warnings };
+}
+
+const isMissing = (v) => v === null || v === undefined;
+
+/** Reprices one record; `force` recomputes known costs too, otherwise only the missing ones. */
+function repriceRecord(r, pricing, jevPricePerMTok, force) {
+  if (!r.usage) return r;
+  const mainDo = force || isMissing(r.cost_usd);
+  const jevDo = Boolean(r.jev) && (force || isMissing(r.jev.cost_usd));
+  if (!mainDo && !jevDo) return r;
+  const main = mainDo ? recomputeCost(r, pricing) : { cost_usd: r.cost_usd, warnings: [] };
+  const side = jevDo ? recomputeJev(r.jev, pricing, jevPricePerMTok) : { jev: r.jev, warnings: [] };
+  return { ...r, cost_usd: main.cost_usd, cost_warnings: [...main.warnings, ...side.warnings], ...(side.jev ? { jev: side.jev } : {}) };
+}
+
 /**
  * Recomputes costs that were unknown when the run was recorded (a price added later), from the usage
  * stored in each record. Records with a known cost, and records without usage, come back unchanged.
  */
 export function applyPricing(records, pricing, jevPricePerMTok = 0.042) {
-  return records.map((r) => {
-    if (!r.usage) return r;
-    const mainNull = r.cost_usd === null || r.cost_usd === undefined;
-    const jevNull = Boolean(r.jev) && (r.jev.cost_usd === null || r.jev.cost_usd === undefined);
-    if (!mainNull && !jevNull) return r;
-    const main = mainNull ? recomputeCost(r, pricing) : { cost_usd: r.cost_usd, warnings: [] };
-    let jev = r.jev;
-    let jevWarnings = [];
-    if (jevNull) {
-      const judge = costFromModelUsage(r.jev.judge_usage ?? {}, pricing);
-      jevWarnings = judge.warnings;
-      jev = { ...r.jev, cost_usd: judge.cost_usd === null ? null : ((r.jev.est_tokens ?? 0) / 1e6) * jevPricePerMTok + judge.cost_usd };
-    }
-    return { ...r, cost_usd: main.cost_usd, cost_warnings: [...main.warnings, ...jevWarnings], ...(jev ? { jev } : {}) };
-  });
+  return records.map((r) => repriceRecord(r, pricing, jevPricePerMTok, false));
+}
+
+/** Recomputes every cost (main and side-channel) from stored usage with the current prices. Records without usage are unchanged. */
+export function repriceAll(records, pricing, jevPricePerMTok = 0.042) {
+  return records.map((r) => repriceRecord(r, pricing, jevPricePerMTok, true));
 }
 
 const promptTokens = (r) => (r.usage ? (r.usage.input_tokens ?? 0) + (r.usage.cache_read_input_tokens ?? 0) + (r.usage.cache_creation_input_tokens ?? 0) : undefined);
-const METRICS = { input_tokens: (r) => r.usage?.input_tokens, cache_read_input_tokens: (r) => r.usage?.cache_read_input_tokens, prompt_tokens_total: promptTokens, output_tokens: (r) => r.usage?.output_tokens, duration_ms: (r) => r.duration_ms, num_turns: (r) => r.num_turns };
+const METRICS = { input_tokens: (r) => r.usage?.input_tokens, cache_read_input_tokens: (r) => r.usage?.cache_read_input_tokens, prompt_tokens_total: promptTokens, output_tokens: (r) => r.usage?.output_tokens, duration_ms: (r) => r.duration_ms, num_turns: (r) => r.num_turns, permission_denials: (r) => r.permission_denials?.count };
 const QUALITY = ['gold_sections_recall', 'gold_sections_precision', 'violations_remaining', 'flags_raised'];
 
 function mergeHistograms(hs) {
@@ -68,6 +78,8 @@ function mergeHistograms(hs) {
   for (const h of hs) for (const [k, v] of Object.entries(h ?? {})) out[k] = (out[k] ?? 0) + v;
   return out;
 }
+
+const countValues = (xs) => xs.reduce((h, x) => ({ ...h, [x]: (h[x] ?? 0) + 1 }), {});
 
 function armSummary(rs, excluded) {
   const priced = rs.filter((r) => isNum(r.cost_usd));
@@ -84,7 +96,8 @@ function armSummary(rs, excluded) {
     latency_ms_median: median(called.map((r) => r.jev.latency_ms_total / r.jev.calls)),
     cost_usd_total: rs.reduce((a, r) => a + (isNum(r.jev?.cost_usd) ? r.jev.cost_usd : 0), 0),
   };
-  return { n: rs.length, n_priced: priced.length, incomplete: rs.filter((r) => r.subtype !== 'success').length, excluded, tasks: [...new Set(rs.map((r) => r.task))], metrics, quality, jev };
+  const denied_commands = countValues(rs.flatMap((r) => r.permission_denials?.commands ?? []));
+  return { n: rs.length, n_priced: priced.length, incomplete: rs.filter((r) => r.subtype !== 'success').length, excluded, tasks: [...new Set(rs.map((r) => r.task))], metrics, quality, jev, denied_commands };
 }
 
 const where = (r) => ({ area: r.area, arm: r.arm, task: r.task, rep: r.rep });
@@ -131,8 +144,25 @@ const HOW_TO_READ = [
   '',
 ];
 
-export function renderReport(manifest, summary) {
-  const lines = [`# JEV benchmark run ${manifest.run_id}`, '', `date ${manifest.date} · provider ${manifest.provider} · models ${JSON.stringify(manifest.models)} · Claude Code ${manifest.claude_code_version} · toolkit ${manifest.toolkit_commit}`, '', ...HOW_TO_READ];
+const TOP_DENIED = 10;
+
+function deniedSection(summary) {
+  const lines = ['## Denied commands', ''];
+  for (const [area, arms] of Object.entries(summary)) {
+    if (area === 'excluded') continue;
+    for (const arm of Object.keys(arms).sort()) {
+      const top = Object.entries(arms[arm].denied_commands ?? {}).sort(([a, x], [b, y]) => y - x || a.localeCompare(b)).slice(0, TOP_DENIED);
+      if (!top.length) continue;
+      lines.push(`### ${area} / ${arm}`, '', ...top.map(([c, n]) => `- ${n} × \`${c.replace(/`/g, "'")}\``), '');
+    }
+  }
+  if (lines.length === 2) lines.push('none', '');
+  return lines;
+}
+
+export function renderReport(manifest, summary, { repriced = false } = {}) {
+  const header = `date ${manifest.date} · provider ${manifest.provider} · models ${JSON.stringify(manifest.models)} · Claude Code ${manifest.claude_code_version} · toolkit ${manifest.toolkit_commit}${repriced ? ' · costs repriced from current config' : ''}`;
+  const lines = [`# JEV benchmark run ${manifest.run_id}`, '', header, '', ...HOW_TO_READ];
   for (const [area, arms] of Object.entries(summary)) {
     if (area === 'excluded') continue;
     const names = Object.keys(arms).sort();
@@ -149,6 +179,7 @@ export function renderReport(manifest, summary) {
     row('cost USD (median / p90)', (a) => pair(a.metrics.cost_usd, 4));
     row('duration s (median / p90)', (a) => `${fmt(seconds(a.metrics.duration_ms.median), 1)} / ${fmt(seconds(a.metrics.duration_ms.p90), 1)}`);
     row('turns (median)', (a) => fmt(a.metrics.num_turns.median, 1));
+    row('permission denials (median / p90)', (a) => pair(a.metrics.permission_denials));
     for (const [q, label] of Object.entries(LABELS)) if (names.some((n) => arms[n].quality[q] !== null)) row(label, (a) => fmt(a.quality[q], 2));
     row('side-channel calls / task', (a) => fmt(a.jev.calls_per_task, 2));
     row('side-channel ok rate', (a) => pct(a.jev.ok_rate));
@@ -160,7 +191,8 @@ export function renderReport(manifest, summary) {
   lines.push('## Excluded', '');
   if (!summary.excluded.length) lines.push('none');
   for (const e of summary.excluded) lines.push(`- ${e.area}/${e.arm} ${e.task} r${e.rep}: ${e.reason}`);
-  return lines.join('\n') + '\n';
+  lines.push('', ...deniedSection(summary));
+  return lines.join('\n').trimEnd() + '\n';
 }
 
 export function compareRuns(a, b) {

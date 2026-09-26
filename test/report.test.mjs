@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { median, p90, applyLabels, applyPricing, readLabels, summarizeRun, renderReport, compareRuns } from '../src/bench/report.mjs';
+import { median, p90, applyLabels, applyPricing, repriceAll, readLabels, summarizeRun, renderReport, compareRuns } from '../src/bench/report.mjs';
 
 const rec = (arm, task, over = {}) => ({ run_id: 'r', area: 'dynamic-context', arm, task, rep: 1, subtype: 'success', usage: { input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 500, cache_creation_input_tokens: 0 }, cost_usd: 0.01, duration_ms: 10000, num_turns: 3, quality: { compile: null, gold_sections_recall: 0.5, gold_sections_precision: 1, violations_remaining: null, flags_raised: null, orchestrator_read_full_diff: null }, jev: { calls: 1, ok_calls: 1, reasons: {}, latency_ms_total: 120, est_tokens: 800, cost_usd: 0.0000336, answers: [] }, ...over });
 
@@ -106,4 +106,56 @@ test('readLabels rejects a malformed line with its line number', async () => {
   const path = join(dir, 'bad.jsonl');
   await writeFile(path, `${JSON.stringify({ area: 'a', arm: 'b', task: 'c', rep: 1, violations_remaining: 0 })}\n{not json\n`);
   await assert.rejects(readLabels(path), /line 2/);
+});
+
+test('summarizeRun counts every non-success record with usage as incomplete, whatever its subtype', () => {
+  const s = summarizeRun([rec('jev', 'a'), rec('jev', 'b', { subtype: 'error_during_execution', exit_code: 1, error: 'claude exit 1' }), rec('jev', 'c', { subtype: 'failed', error: 'boom' })]);
+  const a = s['dynamic-context'].jev;
+  assert.equal(a.n, 3);
+  assert.equal(a.incomplete, 2);
+  assert.equal(a.n_priced, 3);
+  assert.equal(a.excluded, 0);
+});
+
+test('the report has a permission-denials row under turns and a Denied commands section', () => {
+  const manifest = { run_id: 'r', date: 'd', provider: 'p', models: {}, claude_code_version: 'v', toolkit_commit: 'c' };
+  const pd = (count, commands) => ({ permission_denials: { count, by_tool: { Bash: count }, commands } });
+  const s = summarizeRun([
+    rec('jev', 'a', pd(2, ['git commit -m a', 'git push'])),
+    rec('jev', 'b', pd(4, ['git commit -m a', 'git commit -m a', 'git push', 'rm -rf build'])),
+    rec('full', 'a'),
+  ]);
+  const md = renderReport(manifest, s);
+  assert.match(md, /\| turns \(median\) \|[^\n]*\n\| permission denials \(median \/ p90\) \| n\/a \/ n\/a \| 3 \/ 4 \|/);
+  const section = md.slice(md.indexOf('## Denied commands'));
+  assert.ok(md.indexOf('## Denied commands') > md.indexOf('## Excluded'));
+  assert.match(section, /### dynamic-context \/ jev\n\n- 3 × `git commit -m a`\n- 2 × `git push`\n- 1 × `rm -rf build`/);
+  assert.doesNotMatch(section, /dynamic-context \/ full/);
+  const top = summarizeRun([rec('jev', 'a', pd(12, Array.from({ length: 12 }, (_, i) => `c${String(i).padStart(2, '0')}`)))]);
+  assert.equal((renderReport(manifest, top).split('## Denied commands')[1].match(/^- /gm) ?? []).length, 10);
+  assert.match(renderReport(manifest, summarizeRun([rec('jev', 'a')])), /## Denied commands\n\nnone\n/);
+});
+
+test('repriceAll replaces every stale cost from stored usage; applyPricing leaves a known cost alone', () => {
+  const pricing = { m1: { input: 1, output: 2, cache_read: 0.5, cache_write: 1 }, orch: { input: 10, output: 0, cache_read: 0, cache_write: 0 } };
+  const stale = rec('jev', 'a', { cost_usd: 99, usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, per_model: { m1: { input_tokens: 1e6, output_tokens: 1e6, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }, jev: { calls: 1, ok_calls: 1, reasons: {}, latency_ms_total: 1, est_tokens: 2e6, judge_usage: { m1: { input_tokens: 1e6, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }, cost_usd: 42, answers: [] } });
+  const noPerModel = rec('jev', 'b', { cost_usd: 7, orchestrator_model: 'orch', usage: { input_tokens: 1e6, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, per_model: {} } });
+  const failed = rec('jev', 'c', { subtype: 'failed', usage: undefined, cost_usd: undefined });
+  const out = repriceAll([stale, noPerModel, failed], pricing, 0.5);
+  assert.equal(out[0].cost_usd, 3);
+  assert.equal(out[0].jev.cost_usd, 1 + 1);
+  assert.equal(out[1].cost_usd, 10);
+  assert.equal(out[2], failed);
+  assert.equal(stale.cost_usd, 99);
+  const kept = applyPricing([stale, noPerModel], pricing, 0.5);
+  assert.equal(kept[0].cost_usd, 99);
+  assert.equal(kept[0].jev.cost_usd, 42);
+  assert.equal(kept[1].cost_usd, 7);
+});
+
+test('the report header says when costs were repriced', () => {
+  const manifest = { run_id: 'r', date: 'd', provider: 'p', models: {}, claude_code_version: 'v', toolkit_commit: 'c' };
+  const s = summarizeRun([rec('jev', 'a')]);
+  assert.match(renderReport(manifest, s, { repriced: true }), /toolkit c · costs repriced from current config\n/);
+  assert.doesNotMatch(renderReport(manifest, s), /repriced/);
 });
