@@ -5,12 +5,12 @@ benchmark harness. Design: `docs/superpowers/specs/2026-09-21-jev-toolkit-design
 
 ## Hard rules
 
-- **Never write to** `<work checkout>/` or
-  `<work checkout copy>/`. Both are WorkApp checkouts.
-  Do not create files, run git, or install hooks there. Reading is not needed for this project.
+- **Never write to the work checkouts listed in `CLAUDE.local.md`** (local, gitignored). Do not
+  create files, run git, or install hooks there. Reading is not needed for this project.
 - The only Android project this toolkit may modify is `~/Project/WebSocket Inspector`.
 - No `npm install`. `package.json` has no dependencies. Node 20+ built-ins only (`fetch`, `node:test`).
-- No WorkApp text in fixtures, rules, tasks, or CLAUDE.md content written for the target.
+- No employer text in fixtures, rules, tasks, or CLAUDE.md content written for the target; the
+  banned terms live in the gitignored `.jev-banned-terms` and the tests enforce them when present.
 - `TYPESAFE_API_KEY` is never stored in the repo and is not present on this machine. Tests run in
   `JEV_MODE=replay`.
 

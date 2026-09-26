@@ -6,3 +6,5 @@ results/**/*.claude.jsonl
 .DS_Store
 .superpowers/
 .claude-config/
+CLAUDE.local.md
+.jev-banned-terms

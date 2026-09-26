@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadRules } from '../src/targets/rules.mjs';
 import { toolkitRoot } from '../src/client/config.mjs';
+import { findBanned } from './helpers/banned-terms.mjs';
 
 test('loads .md files in filename order and ignores others', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'jevrules-'));
@@ -25,7 +26,7 @@ test('the shipped websocket-inspector rules load with exactly one always-on core
   assert.equal(new Set(rules.map((r) => r.id)).size, 11);
   for (const r of rules) {
     assert.ok(r.summary.length > 10 || r.always, `${r.id} needs a summary`);
-    assert.equal(/workapp/i.test(r.body + r.summary), false, `${r.id} mentions WorkApp`);
+    assert.equal(findBanned(r.body + r.summary), null, `${r.id} mentions a banned term`);
   }
   assert.deepEqual(rules.find((r) => r.id === 'git').paths, []);
 });

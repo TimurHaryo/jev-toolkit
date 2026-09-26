@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadTasks } from '../src/bench/tasks.mjs';
 import { loadRules } from '../src/targets/rules.mjs';
 import { toolkitRoot } from '../src/client/config.mjs';
+import { findBanned } from './helpers/banned-terms.mjs';
 
 test('fifteen shipped tasks with valid labels', async () => {
   const tasks = await loadTasks(join(toolkitRoot(), 'targets', 'websocket-inspector', 'tasks'));
@@ -15,7 +16,7 @@ test('fifteen shipped tasks with valid labels', async () => {
     assert.ok(['haiku', 'sonnet', 'opus'].includes(t.gold_tier), t.id);
     for (const s of t.gold_sections) assert.ok(ids.has(s), `${t.id}: ${s}`);
     assert.ok(t.prompt.trim().length > 40, t.id);
-    assert.equal(/workapp/i.test(t.prompt), false, t.id);
+    assert.equal(findBanned(t.prompt), null, t.id);
     if (t.needs_subagent) assert.match(t.prompt, /subagent in the foreground/);
     if (t.id !== '15-compile-check') assert.match(t.prompt, /Do not run Gradle|Change nothing/);
   }

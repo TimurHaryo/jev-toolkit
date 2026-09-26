@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toolkitRoot } from '../src/client/config.mjs';
 import { loadRules } from '../src/targets/rules.mjs';
+import { findBanned } from './helpers/banned-terms.mjs';
 
 async function cases(area) {
   const text = await readFile(join(toolkitRoot(), 'fixtures', area, 'cases.jsonl'), 'utf8');
@@ -49,6 +50,6 @@ test('model-router: 30 cases, tiers valid, roughly balanced', async () => {
 test('no WorkApp text in any plan-2 fixture', async () => {
   for (const area of ['dynamic-context', 'handback-check', 'model-router']) {
     const text = await readFile(join(toolkitRoot(), 'fixtures', area, 'cases.jsonl'), 'utf8');
-    assert.equal(/workapp/i.test(text), false, area);
+    assert.equal(findBanned(text), null, area);
   }
 });
