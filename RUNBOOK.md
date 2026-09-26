@@ -79,6 +79,14 @@ The LLM judge always runs live against the configured provider (`activeProvider`
 exported; the model is `models.haiku` unless `JEV_JUDGE_MODEL` is set), whatever `--mode` says. The
 second output line is `skipped <n> of <total>`; the command exits 2 when every case was skipped.
 
+`--judge api` asks the provider's Messages endpoint directly with the same prompt, so its tokens and
+latency carry no CLI system prompt or cold start. Every judge ends with a cost line (decisions,
+median and p90 latency, input and output tokens, USD); Jev's input tokens are an estimate, and its
+latency is not real in `--mode replay`. `--dump <path>` writes one JSON line per case with the
+compared rows.
+
+    node bin/jev-accuracy.mjs --area comment-policy --judge api --dump reports/accuracy/comment-policy-api.jsonl
+
 Commit the recordings so replays work everywhere:
 
     git add fixtures/recordings && git commit -m "chore: record Jev responses" && git push
