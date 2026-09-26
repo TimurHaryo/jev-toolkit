@@ -75,7 +75,8 @@ export function decisionCost({ judge, result, state, questions, model, pricing, 
   }
   const usage = result.meta.usage ?? {};
   const priced = costFromUsage(usage, model, pricing);
-  return { latencyMs, inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0, costUsd: priced.cost_usd, warning: priced.warning ?? null };
+  const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  return { latencyMs, inputTokens, outputTokens: usage.output_tokens ?? 0, costUsd: priced.cost_usd, warning: priced.warning ?? null };
 }
 
 function median(sorted) {

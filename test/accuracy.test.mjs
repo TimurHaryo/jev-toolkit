@@ -97,3 +97,9 @@ test('dumpLine: one JSON-ready object per case with the compared rows', async ()
   assert.deepEqual(dumpLine({ index: 2, result: { ok: true, meta: { latencyMs: 12 } }, rows }), { index: 2, ok: true, latencyMs: 12, rows: [{ id: 'narrates_0', expected: true, predicted: true, confidence: 0.9, correct: true }] });
   assert.deepEqual(dumpLine({ index: 3, result: { ok: false, reason: 'api_timeout' }, rows: [] }), { index: 3, ok: false, reason: 'api_timeout', latencyMs: null, rows: [] });
 });
+
+test('llm judge input tokens include cached prompt tokens', async () => {
+  const { decisionCost } = await import('../src/bench/accuracy.mjs');
+  const c = decisionCost({ judge: 'llm', result: { ok: true, meta: { latencyMs: 10, usage: { input_tokens: 5, cache_read_input_tokens: 20000, cache_creation_input_tokens: 100, output_tokens: 30 } } }, model: 'm', pricing: {} });
+  assert.equal(c.inputTokens, 20105);
+});

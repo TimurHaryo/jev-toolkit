@@ -97,3 +97,7 @@ test('mentionedNotInDiff normalises absolute and elided mentions of changed file
   assert.deepEqual(mentionedNotInDiff('Edited ./../../src/A.kt', facts, { cwd }), []);
   assert.deepEqual(mentionedNotInDiff('Read /tmp/repo/src/Other.kt and edited src/A.kt', facts, { cwd }), ['src/Other.kt']);
 });
+
+test('a basename mention does not match a longer basename', () => {
+  assert.deepEqual(mentionedNotInDiff('Edited A.kt', { filesChanged: ['src/BA.kt'] }), ['A.kt']);
+});

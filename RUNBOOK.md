@@ -202,3 +202,7 @@ DeepSeek numbers point the same way.
 - `cost_usd null` in the report: add the price and rerun `jev-report`; the report recomputes cost from stored usage.
 - Hooks silently not firing: `node bin/jev-hooks-check.mjs` again, then check `logs/*.jsonl` for `skipped` lines and their `reason`.
 - Everything Jev-related can be switched off with `JEV_DISABLE=1` in the environment.
+
+Note: from round 5 on, the hand-back card lists files the summary names but the diff lacks on a separate
+`Mentioned but unchanged:` line instead of raising them as flags. Flag counts from earlier runs are
+therefore not comparable with later ones.
