@@ -27,5 +27,5 @@
       "pricing": {}
     }
   },
-  "benchmark": { "maxTurns": 30, "orchestratorTier": "opus", "jevInputPricePerMTok": 0.042, "isolateClaudeConfig": true }
+  "benchmark": { "maxTurns": 45, "orchestratorTier": "opus", "jevInputPricePerMTok": 0.042, "isolateClaudeConfig": true }
 }

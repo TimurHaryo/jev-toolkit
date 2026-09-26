@@ -122,8 +122,10 @@ Before the first run:
     node bin/jev-bench.mjs --area handback        --arm jev    --target "$T" --run-id <id> --reps 1 --yes-reset
 
 `--tasks 01-theme-color,13-explain-frame-path` limits a run; `--compile` adds a Gradle compile check
-per task (needs the Android SDK; slow). Exit code 2 means some tasks failed but results were
-written; the report lists them under Excluded.
+per task (needs the Android SDK; slow). Exit code 2 means some tasks failed or were incomplete
+(for example a session that hit the turn cap) but results were written. That is data: keep going
+with the next command. Runs that produced usage count as incomplete runs in the report; runs with
+no usage are listed under Excluded. Only exit code 3 (a refusal) or a crash stops the sequence.
 
 The handback area runs only the three subagent tasks, so its `n` is 3 per rep.
 
@@ -155,6 +157,10 @@ result to `labels/<id>.jsonl` (create the folder first with `mkdir -p labels`):
 
 Look at `results/<id>/report.md` and a couple of result files before committing. A
 `warning: label did not match any record` line means a typo in the labels file.
+
+After changing prices in `jev.config.json`, regenerate with `node bin/jev-report.mjs --run-id <id>
+--reprice`: it recomputes every cost (session and side-channel) from the stored usage with the
+current prices, and the report header says so. Without `--reprice` only unknown costs are filled.
 
     git add results/<id> labels && git commit -m "results: <id>" && git push
 
