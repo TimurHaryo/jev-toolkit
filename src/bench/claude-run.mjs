@@ -21,7 +21,7 @@ const usageOf = (u) => ({
 });
 
 export function extractResult(result) {
-  if (!result) return { subtype: null, session_id: null, num_turns: 0, duration_ms: 0, usage: usageOf(null), per_model: {}, total_cost_usd_reported: null, result_text: '' };
+  if (!result) return { subtype: null, session_id: null, num_turns: 0, duration_ms: 0, usage: usageOf(null), per_model: {}, total_cost_usd_reported: null, result_text: '', permission_denials: [] };
   const per_model = Object.fromEntries(Object.entries(result.modelUsage ?? {}).map(([m, u]) => [m, usageOf(u)]));
   return {
     subtype: result.subtype ?? null,
@@ -32,6 +32,7 @@ export function extractResult(result) {
     per_model,
     total_cost_usd_reported: typeof result.total_cost_usd === 'number' ? result.total_cost_usd : null,
     result_text: typeof result.result === 'string' ? result.result : '',
+    permission_denials: Array.isArray(result.permission_denials) ? result.permission_denials : [],
   };
 }
 

@@ -18,14 +18,14 @@ async function target() {
   return dir;
 }
 
-function fakeClaude(streamText, { edit, onRun } = {}) {
+function fakeClaude(streamText, { edit, onRun, code = 0 } = {}) {
   return (cmd, args, opts) => {
     fakeClaude.calls.push({ cmd, args, opts });
     const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.kill = () => {};
     setTimeout(async () => {
       if (edit) await writeFile(join(opts.cwd, 'src', 'A.kt'), 'class A { val x = 1 }\n');
       if (onRun) await onRun(opts);
-      p.stdout.emit('data', Buffer.from(streamText)); p.emit('close', 0);
+      p.stdout.emit('data', Buffer.from(streamText)); p.emit('close', code);
     }, 0);
     return p;
   };
@@ -110,7 +110,10 @@ test('handback area runs only subagent tasks and fills its quality fields; a fai
   const f = await runBenchmark(base(s, { area: 'comment-policy', arm: 'none', runId: 'run2', taskIds: ['01-a'], spawnImpl: failing }));
   assert.equal(f.failures.length, 1);
   assert.match(f.failures[0].error, /exit 1/);
-  assert.equal(JSON.parse(await readFile(f.written[0], 'utf8')).subtype, 'failed');
+  const failed = JSON.parse(await readFile(f.written[0], 'utf8'));
+  assert.equal(failed.subtype, 'failed');
+  assert.equal(failed.usage, undefined);
+  assert.equal(failed.cost_usd, undefined);
 });
 
 test('refusals: no --yes-reset, target outside roots, missing token', async () => {
@@ -197,4 +200,68 @@ test('config isolation off leaves CLAUDE_CONFIG_DIR alone; expect_files_hit is t
 
 test('ALLOWED_TOOLS grants only read-only git subcommands', () => {
   assert.equal(ALLOWED_TOOLS, 'Read,Edit,Write,MultiEdit,Grep,Glob,Bash(git diff),Bash(git diff *),Bash(git status),Bash(git status *),Bash(git log),Bash(git log *),Bash(git show),Bash(git show *),Bash(./gradlew *),Agent');
+});
+
+test('a run that hit the turn cap and exited 1 keeps its usage, own subtype, and exit code, and is listed as a failure', async () => {
+  const s = await setup();
+  const capped = s.stream.replace('"subtype":"success"', '"subtype":"error_max_turns"');
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(capped, { code: 1, edit: true }) }));
+  assert.equal(r.written.length, 1);
+  assert.equal(r.failures.length, 1);
+  assert.match(r.failures[0].error, /claude exit 1/);
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.subtype, 'error_max_turns');
+  assert.equal(rec.exit_code, 1);
+  assert.match(rec.error, /claude exit 1/);
+  assert.equal(rec.usage.input_tokens, 1000);
+  assert.equal(typeof rec.cost_usd, 'number');
+  assert.equal(rec.num_turns, 4);
+  assert.deepEqual(rec.diff.files, ['src/A.kt']);
+});
+
+test('a successful run records exit code 0, no error, and its permission denials', async () => {
+  const s = await setup();
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(s.stream) }));
+  assert.deepEqual(r.failures, []);
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.exit_code, 0);
+  assert.equal(rec.error, undefined);
+  assert.deepEqual(rec.permission_denials, { count: 1, by_tool: { Bash: 1 }, commands: ['git commit -m wip'] });
+});
+
+test('permission denials: non-Bash tools list their name, commands are truncated to 120 chars and capped at 20', async () => {
+  const s = await setup();
+  const long = 'x'.repeat(200);
+  const denials = [{ tool_name: 'WebFetch', tool_use_id: 'a', tool_input: { url: 'u' } }, ...Array.from({ length: 24 }, (_, i) => ({ tool_name: 'Bash', tool_use_id: `b${i}`, tool_input: { command: i === 0 ? long : `cmd ${i}` } }))];
+  const stream = s.stream.replace(/"permission_denials":\[[^\]]*\]/, `"permission_denials":${JSON.stringify(denials)}`);
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(stream) }));
+  const rec = JSON.parse(await readFile(r.written[0], 'utf8'));
+  assert.equal(rec.permission_denials.count, 25);
+  assert.deepEqual(rec.permission_denials.by_tool, { WebFetch: 1, Bash: 24 });
+  assert.equal(rec.permission_denials.commands.length, 20);
+  assert.equal(rec.permission_denials.commands[0], 'WebFetch');
+  assert.equal(rec.permission_denials.commands[1], 'x'.repeat(120));
+});
+
+test('the target is reset to the baseline after the last task', async () => {
+  const s = await setup();
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(s.stream, { edit: true }) }));
+  assert.deepEqual(r.failures, []);
+  const status = execFileSync('git', ['status', '--porcelain'], { cwd: s.tgt, encoding: 'utf8' });
+  assert.equal(status, '');
+});
+
+test('a failing final reset is logged and the results are still returned', async () => {
+  const s = await setup();
+  const logs = [];
+  let resets = 0;
+  const runGitImpl = (cwd, args) => {
+    if (args[0] === 'reset') { resets += 1; if (resets > 1) return null; }
+    try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trimEnd(); } catch { return null; }
+  };
+  const r = await runBenchmark(base(s, { spawnImpl: fakeClaude(s.stream), runGitImpl, log: (m) => logs.push(m) }));
+  assert.equal(r.written.length, 1);
+  assert.deepEqual(r.failures, []);
+  assert.equal(resets, 2);
+  assert.ok(logs.some((m) => /final reset failed/.test(m)));
 });

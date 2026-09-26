@@ -57,6 +57,24 @@ async function jevCalls(logDir, areas, sessionId, pricePerMTok, pricing) {
   };
 }
 
+const MAX_DENIED_COMMANDS = 20;
+const MAX_COMMAND_CHARS = 120;
+
+/** Denials from the result event: a count, a per-tool histogram, and the first commands (Bash) or tool names. */
+export function summarizeDenials(denials) {
+  const list = Array.isArray(denials) ? denials : [];
+  const by_tool = {};
+  for (const d of list) { const t = d?.tool_name ?? 'unknown'; by_tool[t] = (by_tool[t] ?? 0) + 1; }
+  const commands = list.slice(0, MAX_DENIED_COMMANDS).map((d) => {
+    const c = d?.tool_name === 'Bash' && typeof d?.tool_input?.command === 'string' ? d.tool_input.command : (d?.tool_name ?? 'unknown');
+    return c.slice(0, MAX_COMMAND_CHARS);
+  });
+  return { count: list.length, by_tool, commands };
+}
+
+/** Why a session that produced output still counts as a failure, or null when it exited cleanly. */
+const exitProblem = (run) => (run.timedOut ? 'claude timed out' : run.code !== 0 ? `claude exit ${run.code}` : null);
+
 /** Simple glob to an anchored regex: `**` any path, `*` within one segment, `?` one character. */
 function globToRegex(glob) {
   let out = '';
@@ -137,9 +155,10 @@ export async function runBenchmark(opts) {
         const run = await runClaude({ cwd: targetDir, prompt: task.prompt, model, maxTurns, allowedTools: ALLOWED_TOOLS, env: runEnv, spawnImpl, rawOutPath: record.raw_result_path, onChild: opts.onChild });
         const { result, events } = parseStream(run.stdout);
         const res = extractResult(result);
-        if (run.timedOut) throw new Error('claude timed out');
-        if (run.code !== 0) throw new Error(`claude exit ${run.code}: ${run.stderr.slice(0, 300)}`);
-        if (!result) throw new Error('no result event in stream');
+        record.exit_code = run.code;
+        const problem = exitProblem(run);
+        // A session that wrote a result event (for example one that hit the turn cap) keeps its usage.
+        if (!result) throw new Error(problem ? (run.timedOut ? problem : `${problem}: ${run.stderr.slice(0, 300)}`) : 'no result event in stream');
         const stat = diffStat({ targetDir, runGitImpl });
         await writeFile(record.diff_path, diffText({ targetDir, runGitImpl }));
         const cost = Object.keys(res.per_model).length ? costFromModelUsage(res.per_model, provider.pricing) : costFromUsage(res.usage, model, provider.pricing);
@@ -152,8 +171,14 @@ export async function runBenchmark(opts) {
           diff: { ...stat, expect_files_hit: expectFilesHit(task.expect_files, stat.files) },
           jev: side.stats,
           quality: await qualityFor({ area, arm, task, logDir: config.logDir, sessionId: res.session_id, events, rules, cardsBefore }),
+          permission_denials: summarizeDenials(res.permission_denials),
         });
         if (compile) record.quality.compile = await (opts.gradleImpl ?? runGradle)(targetDir, spawnImpl);
+        if (problem) {
+          record.error = problem;
+          failures.push({ task: task.id, rep, error: problem });
+          log(`[${area}/${arm}] ${task.id} r${rep}: INCOMPLETE ${problem} (${res.subtype})`);
+        }
       } catch (e) {
         record.subtype = 'failed'; record.error = e.message;
         failures.push({ task: task.id, rep, error: e.message });
@@ -162,5 +187,7 @@ export async function runBenchmark(opts) {
       written.push(await writeResult(resultsDir, record));
     }
   }
+  // Leave the target at the baseline; a failure here must not lose the results already written.
+  try { resetTarget({ targetDir, runGitImpl }); } catch (e) { log(`[${area}/${arm}] final reset failed: ${e.message}`); }
   return { written, failures };
 }

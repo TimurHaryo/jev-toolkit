@@ -24,6 +24,9 @@ test('extractResult maps usage, per-model usage, and reported cost', async () =>
   assert.equal(r.total_cost_usd_reported, 0.0123);
   assert.equal(r.result_text, 'Done.');
   assert.equal(extractResult(null).subtype, null);
+  assert.deepEqual(r.permission_denials, [{ tool_name: 'Bash', tool_use_id: 'tu9', tool_input: { command: 'git commit -m wip' } }]);
+  assert.deepEqual(extractResult(null).permission_denials, []);
+  assert.deepEqual(extractResult({ type: 'result', subtype: 'success' }).permission_denials, []);
 });
 
 test('toolUses and toolResults keep order and ids', async () => {
