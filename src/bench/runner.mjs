@@ -67,7 +67,7 @@ export function summarizeDenials(denials) {
   for (const d of list) { const t = d?.tool_name ?? 'unknown'; by_tool[t] = (by_tool[t] ?? 0) + 1; }
   const commands = list.slice(0, MAX_DENIED_COMMANDS).map((d) => {
     const c = d?.tool_name === 'Bash' && typeof d?.tool_input?.command === 'string' ? d.tool_input.command : (d?.tool_name ?? 'unknown');
-    return c.slice(0, MAX_COMMAND_CHARS);
+    return c.replace(/\s+/g, ' ').trim().slice(0, MAX_COMMAND_CHARS);
   });
   return { count: list.length, by_tool, commands };
 }
