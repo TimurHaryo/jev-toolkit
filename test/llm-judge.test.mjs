@@ -94,3 +94,10 @@ test('judge never passes the parent session markers to its claude child and keep
   assert.equal(seen.KEEP, 'y');
   assert.equal(env.CLAUDECODE, '1');
 });
+
+test('parseJudgeAnswers accepts booleans for yes/no questions', () => {
+  const r = parseJudgeAnswers('{"narrates_0": true, "kind_0": {"choice": "reason", "confidence": 0.9}}', questions);
+  assert.equal(r.ok, true);
+  assert.equal(r.answers.narrates_0.noul, 1);
+  assert.equal(parseJudgeAnswers('{"narrates_0": false, "kind_0": {"choice": "reason", "confidence": 0.9}}', questions).answers.narrates_0.noul, 0);
+});

@@ -103,3 +103,10 @@ test('llm judge input tokens include cached prompt tokens', async () => {
   const c = decisionCost({ judge: 'llm', result: { ok: true, meta: { latencyMs: 10, usage: { input_tokens: 5, cache_read_input_tokens: 20000, cache_creation_input_tokens: 100, output_tokens: 30 } } }, model: 'm', pricing: {} });
   assert.equal(c.inputTokens, 20105);
 });
+
+test('dump lines carry the parse detail and raw reply of a failed decision', async () => {
+  const { dumpLine } = await import('../src/bench/accuracy.mjs');
+  const line = dumpLine({ index: 3, result: { ok: false, reason: 'judge_parse', detail: 'x: bad', raw: 'Sure! {' }, rows: [] });
+  assert.equal(line.detail, 'x: bad');
+  assert.equal(line.raw, 'Sure! {');
+});

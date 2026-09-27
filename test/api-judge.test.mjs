@@ -71,7 +71,9 @@ test('failure reasons: no key, http status, timeout, network, unparsable text', 
   assert.equal(JSON.stringify(unauthorized).includes(TOKEN), false);
   assert.equal((await apiJudge({ ...base, env, fetchImpl: fakeFetch({ body: okBody(), delayMs: 200 }).impl, timeoutMs: 20 })).reason, 'api_timeout');
   assert.equal((await apiJudge({ ...base, env, fetchImpl: fakeFetch({ error: new TypeError('down') }).impl })).reason, 'api_network');
-  assert.equal((await apiJudge({ ...base, env, fetchImpl: fakeFetch({ body: okBody('no json here') }).impl })).reason, 'judge_parse');
+  const noJson = await apiJudge({ ...base, env, fetchImpl: fakeFetch({ body: okBody('no json here') }).impl });
+  assert.equal(noJson.reason, 'judge_parse');
+  assert.equal(noJson.raw, 'no json here');
   assert.equal((await apiJudge({ ...base, env, fetchImpl: fakeFetch({ body: 'not json' }).impl })).reason, 'judge_parse');
 });
 

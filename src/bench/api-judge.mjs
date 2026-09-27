@@ -50,9 +50,10 @@ export async function apiJudge({ state, questions, provider, env, model, fetchIm
     if (res.error) return { ok: false, reason: 'api_network' };
     if (res.status < 200 || res.status >= 300) return { ok: false, reason: `api_http_${res.status}` };
     let parsedBody;
-    try { parsedBody = JSON.parse(res.text); } catch { return { ok: false, reason: 'judge_parse' }; }
-    const parsed = parseJudgeAnswers(textOf(parsedBody), questions);
-    if (!parsed.ok) return { ok: false, reason: 'judge_parse' };
+    try { parsedBody = JSON.parse(res.text); } catch { return { ok: false, reason: 'judge_parse', detail: 'response body is not JSON', raw: String(res.text).slice(0, 300) }; }
+    const reply = textOf(parsedBody);
+    const parsed = parseJudgeAnswers(reply, questions);
+    if (!parsed.ok) return { ok: false, reason: 'judge_parse', detail: parsed.detail, raw: String(reply).slice(0, 300) };
     const usage = { input_tokens: parsedBody.usage?.input_tokens ?? 0, output_tokens: parsedBody.usage?.output_tokens ?? 0 };
     return { ok: true, answers: parsed.answers, meta: { latencyMs: Date.now() - started, usage, model: parsedBody.model ?? model } };
   } catch {

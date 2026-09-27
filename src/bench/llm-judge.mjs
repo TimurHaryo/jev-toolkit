@@ -30,6 +30,7 @@ export function parseJudgeAnswers(text, questions) {
   for (const [id, q] of Object.entries(questions)) {
     const v = obj[id];
     if (q.type === 'noul') {
+      if (typeof v === 'boolean') { answers[id] = { type: 'noul', noul: v ? 1 : 0 }; continue; }
       if (!inUnit(v)) return { ok: false, reason: 'judge_parse', detail: `${id}: expected a number in [0,1]` };
       answers[id] = { type: 'noul', noul: v };
     } else if (q.type === 'choice') {

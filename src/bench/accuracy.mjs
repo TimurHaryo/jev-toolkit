@@ -106,7 +106,7 @@ export function dumpLine({ index, result, rows }) {
   return {
     index,
     ok: Boolean(result?.ok),
-    ...(result?.ok ? {} : { reason: result?.reason ?? 'unknown' }),
+    ...(result?.ok ? {} : { reason: result?.reason ?? 'unknown', ...(result?.detail ? { detail: result.detail } : {}), ...(result?.raw ? { raw: result.raw } : {}) }),
     latencyMs: result?.meta?.latencyMs ?? null,
     rows: rows.map(({ id, expected, predicted, confidence, correct }) => ({ id, expected, predicted, confidence, correct })),
   };
