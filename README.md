@@ -14,6 +14,26 @@ hand-back check (PreToolUse snapshot + PostToolUse card), model-router CLI and s
 Plan 3 done: providers and pricing, LLM judge arm, benchmark runner, reporter, first-contact hook
 check, RUNBOOK.md.
 
+## Results (benchmark finished 2026-09-27)
+
+Six rounds on the WebSocket Inspector target, main model DeepSeek v4-flash, up to 15 runs per arm.
+
+| Dynamic context, cost per session | median vs full | p90 vs full |
+| --- | --- | --- |
+| Jev, 12 KB ruleset | -10% | -20% |
+| native path-scoped rules, 12 KB | -3% | -23% |
+| Jev, 41 KB ruleset | -17% | -34% |
+| native path-scoped rules, 41 KB | -13% | -27% |
+
+- Every arm compiled in 100% of runs. Jev's rule precision was 0.79, against 0.04 for inlining all rules.
+- Jev's edge over native path-scoped rules is about 5-9% of session cost, for about 250-450 ms per prompt.
+- On the same labelled fixtures Jev's accuracy was 81-93% per area, level with a direct LLM judge.
+  Jev was about 10x cheaper and 2.5x faster per decision.
+- The hand-back check and comment policy produced no meaningful saving. DeepSeek already followed the
+  comment rules.
+- Verdict: use native path-scoped rules for cost. Treat Jev as a fast, calibrated classifier for
+  hooks, not a cost saver. No run used Claude models; samples are small; labels are self-authored.
+
 ## Setup on a device that has a TypeSafe key
 
     git clone https://github.com/TimurHaryo/websocket-inspector.git   # the benchmark target
