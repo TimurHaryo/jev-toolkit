@@ -137,6 +137,12 @@ no usage are listed under Excluded. Only exit code 3 (a refusal) or a crash stop
 
 The handback area runs only the three subagent tasks, so its `n` is 3 per rep.
 
+`--target-name websocket-inspector-large` runs the dynamic-context area against the same project
+with a 36-section, roughly 41 KB ruleset (the original eleven sections plus 25 generic ones) and
+five of the tasks, to see whether section selection saves more as rules grow. Only the three
+dynamic-context arms exist for it. The default is `websocket-inspector`; an unknown name is
+refused (exit 3) before the target is touched. Use a separate run id for large-target runs.
+
 Sanity check after the one-repetition run, before spending on three:
 
     node bin/jev-report.mjs --run-id <id>

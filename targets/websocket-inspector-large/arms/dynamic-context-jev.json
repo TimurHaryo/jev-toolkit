@@ -1,0 +1,9 @@
+{
+  "claudeMd": "stub",
+  "rules": "jev",
+  "hooks": {
+    "UserPromptSubmit": [
+      { "bin": "jev-hook-dynamic-context.mjs", "timeout": 10, "statusMessage": "JEV selecting rules" }
+    ]
+  }
+}
